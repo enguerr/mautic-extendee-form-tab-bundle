@@ -1,5 +1,5 @@
 {
-  "name": "kuzmany/mautic-custom-tags-bundle",
+  "name": "kuzmany/mautic-extendee-form-tab-bundle",
   "type": "mautic-plugin",
   "require": {
     "mautic/composer-plugin": "^1.0"
