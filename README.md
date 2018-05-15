@@ -2,7 +2,7 @@
 
 FromTab bundle added related contacts form results to contacts profile. 
 
-Extension for Mautic from Extendee family www.extendee.com and donate by https://www.newcom4u.ch/ 
+Extension for Mautic from Extendee family www.extendee.com and donate by www.newcom4u.ch 
 Translations and improvements are welcome as pull requests.
 
 ## Installation
