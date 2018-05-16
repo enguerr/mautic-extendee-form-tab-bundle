@@ -29,4 +29,4 @@ Plugin settings
 
 Form tab
 
-![image](https://user-images.githubusercontent.com/462477/40134591-2a593e26-5943-11e8-8795-164b9e81584c.png)
+![image](https://user-images.githubusercontent.com/462477/40134658-6444315e-5943-11e8-8832-376b0ef20c59.png)
