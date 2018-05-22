@@ -4,7 +4,7 @@ return [
     'name'        => 'Extendee Form Tab',
     'description' => 'Form tab in contacts detail for Mautic',
     'author'      => 'mtcextendee.com',
-    'version'     => '1.0.0',
+    'version'     => '1.0.1',
     'services' => [
         'events' => [
             'mautic.extendee.form.tab.inject.custom.content.subscriber' => [
