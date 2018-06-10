@@ -12,7 +12,6 @@
     <?php endforeach; ?>
 </ul>
 <div class="tab-content pa-md">
-
     <?php foreach ($leadForms as $key=>$leadForm):
         ?>
         <div class="tab-pane fade bdr-w-0  <?php if ($key == 0): ?> active in<?php endif; ?>" id="form-<?php echo $leadForm['entity']->getAlias()?>">

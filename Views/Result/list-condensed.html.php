@@ -10,13 +10,41 @@
  */
 
 $formId = $form->getId();
-
 ?>
+<p>
+<?php
+$buttons[] = [
+    'attr' => [
+        'data-toggle' => 'download',
+        'data-toggle' => '',
+        'class'       => 'btn btn-default btn-nospin',
+        'href'        => $view['router']->path('mautic_form_export', ['objectId' => $form->getId(), 'format' => 'xlsx']),
+    ],
+    'btnText'   => $view['translator']->trans('mautic.form.result.export.xlsx'),
+    'iconClass' => 'fa fa-plugs',
+    'primary'   => true,
+];
+echo $view->render('MauticCoreBundle:Helper:page_actions.html.php', ['customButtons' => $buttons]);
+?>
+</p>
+
 <div class="table-responsive table-responsive-force">
     <table class="table table-hover table-striped table-bordered formresult-list">
         <thead>
             <tr>
                 <?php
+                $canDelete = true;
+                if ($canDelete):
+                    echo $view->render('MauticCoreBundle:Helper:tableheader.html.php', [
+                        'checkall'        => 'true',
+                        'target'          => '#formResultTable',
+                        'routeBase'       => 'form_results',
+                        'query'           => ['formId' => $formId],
+                        'templateButtons' => [
+                            'delete' => $canDelete,
+                        ],
+                    ]);
+                endif;
                 echo $view->render('MauticCoreBundle:Helper:tableheader.html.php', [
                     'sessionVar' => 'formresult.'.$formId,
                     'text'       => 'mautic.form.result.thead.date',
@@ -45,6 +73,25 @@ $formId = $form->getId();
         <?php foreach ($items as $item): ?>
             <?php $item['name'] = $view['translator']->trans('mautic.form.form.results.name', ['%id%' => $item['id']]); ?>
             <tr>
+                <?php
+                if ($canDelete): ?>
+                    <td>
+                        <?php
+                        echo $view->render('MauticCoreBundle:Helper:list_actions.html.php', [
+                            'item'            => $item,
+                            'templateButtons' => [
+                                'delete' => $canDelete,
+                            ],
+                            'route'   => 'mautic_form_results_action',
+                            'langVar' => 'form.results',
+                            'query'   => [
+                                'formId'       => $formId,
+                                'objectAction' => 'delete',
+                            ],
+                        ]);
+                        ?>
+                    </td>
+                <?php endif; ?>
                 <td>
                     <?php echo $view['date']->toFull($item['dateSubmitted']); ?>
                 </td>
