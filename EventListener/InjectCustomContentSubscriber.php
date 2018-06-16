@@ -140,21 +140,27 @@ class InjectCustomContentSubscriber extends CommonSubscriber
         $target = null,
         $header = ''
     ) {
-        $objectId = $event->getRequest()->get('objectId');
-        $route    = $this->router->generate(
-            'mautic_plugin_extendee',
-            [
-                'objectAction' => $objectAction,
-                'objectId'     => $objectId,
-            ]
-        );
+        $formId = $event->getRequest()->get('objectId', '');
 
+        if (!$formId) {
+            return;
+        }
+        $parameters =          [
+            'formId'     => $formId,
+        ];
+
+        if (method_exists($event, 'getItem') && is_array($event->getItem())) {
+            $parameters['objectId'] =  $event->getItem()['id'];
+        }
+        $route    = $this->router->generate(
+            'mautic_formtabsubmission_edit',
+            $parameters
+        );
         $attr = [
             'href'        => $route,
             'data-toggle' => 'ajax',
             'data-method' => 'POST',
         ];
-
         switch ($target) {
             case '_blank':
                 $attr['data-toggle'] = '';
@@ -182,7 +188,7 @@ class InjectCustomContentSubscriber extends CommonSubscriber
             ->addButton(
                 $button,
                 $location,
-                [$context, ['objectId' => $objectId]]
+                [$context, ['objectId' => $formId]]
             );
 
     }

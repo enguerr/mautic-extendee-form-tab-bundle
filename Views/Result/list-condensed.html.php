@@ -21,7 +21,7 @@ $buttons[] = [
         'href'        => $view['router']->path('mautic_form_export', ['objectId' => $form->getId(), 'format' => 'xlsx']),
     ],
     'btnText'   => $view['translator']->trans('mautic.form.result.export.xlsx'),
-    'iconClass' => 'fa fa-plugs',
+    'iconClass' => 'fa fa-file-excel-o',
     'primary'   => true,
 ];
 echo $view->render('MauticCoreBundle:Helper:page_actions.html.php', ['customButtons' => $buttons]);
