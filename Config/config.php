@@ -39,6 +39,21 @@ return [
             ],
         ],
         'other' => [
+            'mautic.extendee.form.tab.service.save_submission' => [
+                'class' => \MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission::class,
+                'arguments' => [
+                    'mautic.form.model.form',
+                    'mautic.helper.form.field_helper',
+                    'mautic.form.validator.upload_field_validator',
+                    'mautic.form.helper.form_uploader',
+                    'mautic.campaign.model.campaign',
+                    'event_dispatcher',
+                    'translator',
+                    'mautic.form.model.submission',
+                    'mautic.helper.ip_lookup',
+                    'doctrine.orm.entity_manager'
+                ],
+            ],
             'mautic.extendee.form.tab.helper' => [
                 'class'     => \MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper::class,
                 'arguments' => [
@@ -47,7 +62,8 @@ return [
                     'mautic.helper.user',
                     'mautic.security',
                     'mautic.form.model.submission',
-                    'mautic.helper.integration'
+                    'mautic.helper.integration',
+                    'mautic.lead.model.lead',
                 ],
             ],
         ],

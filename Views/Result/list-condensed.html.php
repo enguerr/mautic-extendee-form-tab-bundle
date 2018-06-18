@@ -12,30 +12,36 @@
 $formId = $form->getId();
 ?>
 <p>
-<?php
-$buttons[] = [
-    'attr' => [
-        'data-toggle' => 'download',
-        'data-toggle' => '',
-        'class'       => 'btn btn-default btn-nospin',
-        'href'        => $view['router']->path('mautic_form_export', ['objectId' => $form->getId(), 'format' => 'xlsx']),
-    ],
-    'btnText'   => $view['translator']->trans('mautic.form.result.export.xlsx'),
-    'iconClass' => 'fa fa-file-excel-o',
-    'primary'   => true,
-];
-echo $view->render('MauticCoreBundle:Helper:page_actions.html.php', ['customButtons' => $buttons]);
-?>
+    <?php
+    $customButtons = [
+        [
+            'attr' => [
+                'data-toggle' => 'ajaxmodal',
+                'data-target' => '#MauticSharedModal',
+                'data-header' => $view['translator']->trans('mautic.extendee.form.tab.add',[ '%contactEmail%'=> $lead['email']]),
+                'data-footer' => 'false',
+                'href'        => $view['router']->path(
+                    'mautic_formtabsubmission_edit',
+                    ['formId' => $form->getId()]
+                ),
+            ],
+            'btnText'   => $view['translator']->trans('mautic.core.form.new'),
+            'iconClass' => 'fa fa-plus',
+        ],
+    ];
+    echo $view->render('MauticCoreBundle:Helper:page_actions.html.php', ['customButtons' => $customButtons]);
+    ?>
 </p>
 
 <div class="table-responsive table-responsive-force">
     <table class="table table-hover table-striped table-bordered formresult-list">
         <thead>
-            <tr>
-                <?php
-                $canDelete = true;
-                if ($canDelete):
-                    echo $view->render('MauticCoreBundle:Helper:tableheader.html.php', [
+        <tr>
+            <?php
+            if ($canDelete):
+                echo $view->render(
+                    'MauticCoreBundle:Helper:tableheader.html.php',
+                    [
                         'checkall'        => 'true',
                         'target'          => '#formResultTable',
                         'routeBase'       => 'form_results',
@@ -43,74 +49,112 @@ echo $view->render('MauticCoreBundle:Helper:page_actions.html.php', ['customButt
                         'templateButtons' => [
                             'delete' => $canDelete,
                         ],
-                    ]);
-                endif;
-                echo $view->render('MauticCoreBundle:Helper:tableheader.html.php', [
+                    ]
+                );
+            endif;
+            echo $view->render(
+                'MauticCoreBundle:Helper:tableheader.html.php',
+                [
                     'sessionVar' => 'formresult.'.$formId,
                     'text'       => 'mautic.form.result.thead.date',
                     'class'      => 'col-formresult-date',
                     'dataToggle' => 'date',
-                ]);
+                ]
+            );
 
-                $fields     = $form->getFields();
-                $fieldCount = ($canDelete) ? 4 : 3;
-                foreach ($fields as $f):
-                    if (in_array($f->getType(), $viewOnlyFields) || $f->getSaveResult() === false) {
-                        continue;
-                    }
-                    echo $view->render('MauticCoreBundle:Helper:tableheader.html.php', [
+            $fields     = $form->getFields();
+            $fieldCount = ($canDelete) ? 4 : 3;
+            foreach ($fields as $f):
+                if (in_array($f->getType(), $viewOnlyFields) || $f->getSaveResult() === false) {
+                    continue;
+                }
+                echo $view->render(
+                    'MauticCoreBundle:Helper:tableheader.html.php',
+                    [
                         'sessionVar' => 'formresult.'.$formId,
                         'text'       => $f->getLabel(),
                         'class'      => 'col-formresult-field col-formresult-field'.$f->getId(),
-                    ]);
-                    ++$fieldCount;
-                endforeach;
-                ?>
-            </tr>
+                    ]
+                );
+                ++$fieldCount;
+            endforeach;
+            ?>
+        </tr>
         </thead>
         <tbody>
         <?php if (count($items)): ?>
-        <?php foreach ($items as $item): ?>
-            <?php $item['name'] = $view['translator']->trans('mautic.form.form.results.name', ['%id%' => $item['id']]); ?>
-            <tr>
-                <?php
-                if ($canDelete): ?>
-                    <td>
-                        <?php
-                        echo $view->render('MauticCoreBundle:Helper:list_actions.html.php', [
-                            'item'            => $item,
-                            'templateButtons' => [
-                                'delete' => $canDelete,
+            <?php foreach ($items as $item): ?>
+                <?php $item['name'] = $view['translator']->trans(
+                    'mautic.form.form.results.name',
+                    ['%id%' => $item['id']]
+                ); ?>
+                <tr>
+                    <?php
+                    if ($canDelete):
+
+                        $customButtons = [
+                            [
+                                'attr'      => [
+                                    'data-toggle' => 'ajaxmodal',
+                                    'data-target' => '#MauticSharedModal',
+                                    'data-header' => $view['translator']->trans(
+                                        'mautic.extendee.form.tab.edit',
+                                        ['%formName%' => $form->getName(), '%contactEmail%' => $lead['email']]
+                                    ),
+                                    'data-footer' => 'false',
+                                    'href'        => $view['router']->path(
+                                        'mautic_formtabsubmission_edit',
+                                        ['objectId' => $item['id'], 'formId' => $form->getId()]
+                                    ),
+                                ],
+                                'btnText'   => $view['translator']->trans('mautic.core.form.edit'),
+                                'iconClass' => 'fa fa-pencil-square-o',
                             ],
-                            'route'   => 'mautic_form_results_action',
-                            'langVar' => 'form.results',
-                            'query'   => [
-                                'formId'       => $formId,
-                                'objectAction' => 'delete',
-                            ],
-                        ]);
+                        ];
                         ?>
+                        <td>
+                            <?php
+                            echo $view->render(
+                                'MauticCoreBundle:Helper:list_actions.html.php',
+                                [
+                                    'item'            => $item,
+                                    'templateButtons' => [
+                                        'delete' => $canDelete,
+                                    ],
+                                    'route'           => 'mautic_form_results_action',
+                                    'langVar'         => 'form.results',
+                                    'query'           => [
+                                        'formId'       => $formId,
+                                        'objectAction' => 'delete',
+                                    ],
+                                    'customButtons'   => isset($customButtons) ? $customButtons : [],
+                                ]
+                            );
+                            ?>
+                        </td>
+                    <?php endif; ?>
+                    <td>
+                        <?php echo $view['date']->toFull($item['dateSubmitted']); ?>
                     </td>
-                <?php endif; ?>
-                <td>
-                    <?php echo $view['date']->toFull($item['dateSubmitted']); ?>
-                </td>
-                <?php foreach ($item['results'] as $key => $r): ?>
-                    <?php $isTextarea = $r['type'] === 'textarea'; ?>
-                    <td <?php echo $isTextarea ? 'class="long-text"' : ''; ?>>
-                        <?php if ($isTextarea) : ?>
-                            <?php echo nl2br($r['value']); ?>
-                        <?php elseif ($r['type'] === 'file') : ?>
-                            <a href="<?php echo $view['router']->path('mautic_form_file_download', ['submissionId' => $item['id'], 'field' => $key]); ?>">
+                    <?php foreach ($item['results'] as $key => $r): ?>
+                        <?php $isTextarea = $r['type'] === 'textarea'; ?>
+                        <td <?php echo $isTextarea ? 'class="long-text"' : ''; ?>>
+                            <?php if ($isTextarea) : ?>
+                                <?php echo nl2br($r['value']); ?>
+                            <?php elseif ($r['type'] === 'file') : ?>
+                                <a href="<?php echo $view['router']->path(
+                                    'mautic_form_file_download',
+                                    ['submissionId' => $item['id'], 'field' => $key]
+                                ); ?>">
+                                    <?php echo $r['value']; ?>
+                                </a>
+                            <?php else : ?>
                                 <?php echo $r['value']; ?>
-                            </a>
-                        <?php else : ?>
-                            <?php echo $r['value']; ?>
-                        <?php endif; ?>
-                    </td>
-                <?php endforeach; ?>
-            </tr>
-        <?php endforeach; ?>
+                            <?php endif; ?>
+                        </td>
+                    <?php endforeach; ?>
+                </tr>
+            <?php endforeach; ?>
         <?php endif; ?>
         </tbody>
     </table>

@@ -19,6 +19,7 @@ use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
 use Mautic\LeadBundle\Entity\Lead;
+use Mautic\LeadBundle\Model\LeadModel;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Integration\FormTabIntegration;
 
@@ -61,6 +62,11 @@ class FormTabHelper
     private $resultCache;
 
     /**
+     * @var LeadModel
+     */
+    private $leadModel;
+
+    /**
      * FormTabHelper constructor.
      *
      * @param TemplatingHelper  $templatingHelper
@@ -69,6 +75,7 @@ class FormTabHelper
      * @param CorePermissions   $security
      * @param SubmissionModel   $submissionModel
      * @param IntegrationHelper $integrationHelper
+     * @param LeadModel         $leadModel
      */
     public function __construct(
         TemplatingHelper $templatingHelper,
@@ -76,7 +83,8 @@ class FormTabHelper
         UserHelper $userHelper,
         CorePermissions $security,
         SubmissionModel $submissionModel,
-        IntegrationHelper $integrationHelper
+        IntegrationHelper $integrationHelper,
+        LeadModel $leadModel
     ) {
 
         $this->formModel         = $formModel;
@@ -85,6 +93,7 @@ class FormTabHelper
         $this->security          = $security;
         $this->submissionModel   = $submissionModel;
         $this->integrationHelper = $integrationHelper;
+        $this->leadModel = $leadModel;
     }
 
     /**
@@ -139,6 +148,8 @@ class FormTabHelper
             return [];
         }
 
+        $lead = $this->leadModel->getLead($leadId);
+
         $formResults    = [];
         $viewOnlyFields = $this->formModel->getCustomComponents()['viewOnlyFields'];
         $filters        = [];
@@ -146,7 +157,12 @@ class FormTabHelper
 
 
         $permissions = $this->security->isGranted(
-            ['form:forms:viewown', 'form:forms:viewother'],
+            [
+                'form:forms:editown',
+                'form:forms:editother',
+                'form:forms:viewown',
+                'form:forms:viewother'
+            ],
             'RETURN_ARRAY'
         );
         if ($permissions['form:forms:viewown'] && !$permissions['form:forms:viewother']) {
@@ -193,6 +209,7 @@ class FormTabHelper
             $formResults[$key]['content'] = $this->templatingHelper->getTemplating()->render(
                 'MauticExtendeeFormTabBundle:Result:list-condensed.html.php',
                 [
+                    'lead'          =>  $lead,
                     'items'          => $submissionEntities['results'],
                     'filters'        => $filters,
                     'form'           => $form,
@@ -200,12 +217,18 @@ class FormTabHelper
                     'totalCount'     => $submissionEntities['count'],
                     'limit'          => $limit,
                     'tmpl'           => '',
-                    'canDelete'      => false,
+                    'canDelete'      => $this->security->hasEntityAccess(
+                        'form:forms:editown',
+                        'form:forms:editother',
+                        $form->getCreatedBy()
+                    ),
+                    'permissions'    => $permissions,
                     'viewOnlyFields' => $viewOnlyFields,
                 ]
             );
         }
         $this->resultCache = array_values($formResults);
+
         return $this->resultCache;
     }
 

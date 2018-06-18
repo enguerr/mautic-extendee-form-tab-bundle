@@ -21,7 +21,6 @@
 
     </head>
     <body>
-    test
         <?php echo $content; ?>
     </body>
 </html>
