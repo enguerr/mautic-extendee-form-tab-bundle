@@ -2,8 +2,10 @@
 
 FromTab bundle added related contacts form results to contacts profile. Plugin based on official [closed pull request](https://github.com/mautic/mautic/pull/5685)
 
-Extension for Mautic from Extendee family www.extendee.com and donate by www.newcom4u.ch 
-Translations and improvements are welcome as pull requests.
+#### Support our projects
+
+- Extensions family for Mautic https://mtcextendee.com/
+- Recommendations engine for Mautic https://mtcrecombee.com/
 
 ## Installation
 
