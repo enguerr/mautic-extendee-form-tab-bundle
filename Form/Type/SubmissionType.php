@@ -1,7 +1,7 @@
 <?php
 
 /*
- * @copyright   2016 Mautic Contributors. All rights reserved
+ * @copyright   2015 Mautic Contributors. All rights reserved
  * @author      Mautic
  *
  * @link        http://mautic.org
@@ -15,17 +15,23 @@ use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\FormBuilderInterface;
 
 /**
- * Class SubmissionType.
+ * Class SubmissionType
  */
 class SubmissionType extends AbstractType
 {
-
     /**
      * @param FormBuilderInterface $builder
      * @param array                $options
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
+        $builder->add(
+            'buttons',
+            'form_buttons',
+            [
+                'apply_text' => false,
+            ]
+        );
 
     }
 
@@ -34,6 +40,6 @@ class SubmissionType extends AbstractType
      */
     public function getName()
     {
-        return 'submission';
+        return 'form_tab_submission';
     }
 }

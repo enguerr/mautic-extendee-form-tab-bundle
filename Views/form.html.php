@@ -9,18 +9,10 @@
  * @license     GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
  */
 ?>
-<html>
-    <head>
-        <title><?php echo $name; ?></title>
 
-        <?php if (isset($stylesheets) && is_array($stylesheets)) : ?>
-        <?php foreach ($stylesheets as $css): ?>
-        <link rel="stylesheet" type="text/css" href="<?php echo $css; ?>" />
-        <?php endforeach; ?>
-        <?php endif; ?>
+<?php echo $view['form']->start($form); ?>
+<?php echo $content; ?>
 
-    </head>
-    <body>
-        <?php echo $content; ?>
-    </body>
-</html>
+        <?php echo $view['form']->row($form['buttons']); ?>
+
+<?php echo $view['form']->end($form); ?>

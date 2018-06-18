@@ -11,6 +11,10 @@ return [
                 'path'       => '/formtab/submission/edit/{formId}/{objectId}',
                 'controller' => 'MauticExtendeeFormTabBundle:Submission:edit',
             ],
+            'mautic_formtabsubmission_edit2' => [
+                'path'       => '/formtab/submission/merge/{objectId}',
+                'controller' => 'MauticExtendeeFormTabBundle:Submission:merge',
+            ],
             'mautic_formtab_postresults' => [
                 'path'       => '/formtab/submission/submit',
                 'controller' => 'MauticExtendeeFormTabBundle:Submission:submit',
@@ -33,9 +37,9 @@ return [
             ],
         ],
         'forms' => [
-            'mautic.form.type.submission' => [
+            'mautic.form.tab.type.submission' => [
                 'class' => MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\SubmissionType::class,
-                'alias' => 'submission',
+                'alias' => 'form_tab_submission',
             ],
         ],
         'other' => [

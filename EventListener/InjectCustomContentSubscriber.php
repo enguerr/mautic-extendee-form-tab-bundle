@@ -79,7 +79,8 @@ class InjectCustomContentSubscriber extends CommonSubscriber
             'fa fa-pencil-square-o',
             'mautic_form_results',
             1000,
-            true
+            true,
+            '#MauticSharedModal'
         );
     }
 
@@ -152,6 +153,7 @@ class InjectCustomContentSubscriber extends CommonSubscriber
         if (method_exists($event, 'getItem') && is_array($event->getItem())) {
             $parameters['objectId'] =  $event->getItem()['id'];
         }
+        $parameters['objectId'] = 1;
         $route    = $this->router->generate(
             'mautic_formtabsubmission_edit',
             $parameters

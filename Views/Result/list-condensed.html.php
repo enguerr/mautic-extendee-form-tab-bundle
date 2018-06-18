@@ -104,7 +104,7 @@ $formId = $form->getId();
                                     'data-footer' => 'false',
                                     'href'        => $view['router']->path(
                                         'mautic_formtabsubmission_edit',
-                                        ['objectId' => $item['id'], 'formId' => $form->getId()]
+                                        ['objectId' => 1, 'formId' => $form->getId()]
                                     ),
                                 ],
                                 'btnText'   => $view['translator']->trans('mautic.core.form.edit'),

@@ -15,6 +15,7 @@ use Mautic\CoreBundle\Controller\CommonController;
 use Mautic\CoreBundle\Helper\InputHelper;
 use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Model\FormModel;
+use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\SubmissionType;
 use MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission;
 
 /**
@@ -42,11 +43,17 @@ class SubmissionController extends CommonController
         $template = null;
         $router   = $this->get('router');
 
+
         if ($form === null || !$form->isPublished()) {
             return $this->notFound();
         } else {
             $html = $model->getContent($form, true, false);
-
+            $formView = $this->get('form.factory')->create(
+                'form_tab_submission',
+                [],
+                [
+                ]
+            );
             $action = $router->generate(
                 'mautic_formtab_postresults',
                 [
@@ -62,6 +69,7 @@ class SubmissionController extends CommonController
                 'viewParameters'  => [
                     'content' => $html,
                     'name'    => $form->getName(),
+                    'form'=>    $formView->createView(),
                 ],
                 'contentTemplate' => 'MauticExtendeeFormTabBundle::form.html.php',
                 'passthroughVars' => [
@@ -186,4 +194,186 @@ class SubmissionController extends CommonController
             return $this->render('MauticFormBundle::messenger.html.php', ['response' => $response]);
         }
     }
+
+    /**
+     * Generates merge form and action.
+     *
+     * @param   $objectId
+     *
+     * @return array|JsonResponse|\Symfony\Component\HttpFoundation\RedirectResponse|\Symfony\Component\HttpFoundation\Response
+     */
+    public function mergeAction($objectId)
+    {
+        /** @var \Mautic\LeadBundle\Model\LeadModel $model */
+        $model    = $this->getModel('lead');
+        $mainLead = $model->getEntity($objectId);
+        $page     = $this->get('session')->get('mautic.lead.page', 1);
+
+        //set the return URL
+        $returnUrl = $this->generateUrl('mautic_contact_index', ['page' => $page]);
+
+        $postActionVars = [
+            'returnUrl'       => $returnUrl,
+            'viewParameters'  => ['page' => $page],
+            'contentTemplate' => 'MauticLeadBundle:Lead:index',
+            'passthroughVars' => [
+                'activeLink'    => '#mautic_contact_index',
+                'mauticContent' => 'lead',
+            ],
+        ];
+
+        if ($mainLead === null) {
+            return $this->postActionRedirect(
+                array_merge(
+                    $postActionVars,
+                    [
+                        'flashes' => [
+                            [
+                                'type'    => 'error',
+                                'msg'     => 'mautic.lead.lead.error.notfound',
+                                'msgVars' => ['%id%' => $objectId],
+                            ],
+                        ],
+                    ]
+                )
+            );
+        }
+
+        //do some default filtering
+        $session = $this->get('session');
+        $search  = $this->request->get('search', $session->get('mautic.lead.merge.filter', ''));
+        $session->set('mautic.lead.merge.filter', $search);
+        $leads = [];
+
+        if (!empty($search)) {
+            $filter = [
+                'string' => $search,
+                'force'  => [
+                    [
+                        'column' => 'l.date_identified',
+                        'expr'   => 'isNotNull',
+                        'value'  => $mainLead->getId(),
+                    ],
+                    [
+                        'column' => 'l.id',
+                        'expr'   => 'neq',
+                        'value'  => $mainLead->getId(),
+                    ],
+                ],
+            ];
+
+            $leads = $model->getEntities(
+                [
+                    'limit'          => 25,
+                    'filter'         => $filter,
+                    'orderBy'        => 'l.firstname,l.lastname,l.company,l.email',
+                    'orderByDir'     => 'ASC',
+                    'withTotalCount' => false,
+                ]
+            );
+        }
+
+        $leadChoices = [];
+        foreach ($leads as $l) {
+            $leadChoices[$l->getId()] = $l->getPrimaryIdentifier();
+        }
+
+        $action = $this->generateUrl('mautic_contact_action', ['objectAction' => 'merge', 'objectId' => $mainLead->getId()]);
+
+        $form = $this->get('form.factory')->create(
+            'lead_merge',
+            [],
+            [
+                'action' => $action,
+                'leads'  => $leadChoices,
+            ]
+        );
+
+        if ($this->request->getMethod() == 'POST') {
+            $valid = true;
+            if (!$this->isFormCancelled($form)) {
+                if ($valid = $this->isFormValid($form)) {
+                    $data      = $form->getData();
+                    $secLeadId = $data['lead_to_merge'];
+                    $secLead   = $model->getEntity($secLeadId);
+
+                    if ($secLead === null) {
+                        return $this->postActionRedirect(
+                            array_merge(
+                                $postActionVars,
+                                [
+                                    'flashes' => [
+                                        [
+                                            'type'    => 'error',
+                                            'msg'     => 'mautic.lead.lead.error.notfound',
+                                            'msgVars' => ['%id%' => $secLead->getId()],
+                                        ],
+                                    ],
+                                ]
+                            )
+                        );
+                    } elseif (
+                        !$this->get('mautic.security')->hasEntityAccess('lead:leads:editown', 'lead:leads:editother', $mainLead->getPermissionUser())
+                        || !$this->get('mautic.security')->hasEntityAccess('lead:leads:editown', 'lead:leads:editother', $secLead->getPermissionUser())
+                    ) {
+                        return $this->accessDenied();
+                    } elseif ($model->isLocked($mainLead)) {
+                        //deny access if the entity is locked
+                        return $this->isLocked($postActionVars, $secLead, 'lead');
+                    } elseif ($model->isLocked($secLead)) {
+                        //deny access if the entity is locked
+                        return $this->isLocked($postActionVars, $secLead, 'lead');
+                    }
+
+                    //Both leads are good so now we merge them
+                    $mainLead = $model->mergeLeads($mainLead, $secLead, false);
+                }
+            }
+
+            if ($valid) {
+                $viewParameters = [
+                    'objectId'     => $mainLead->getId(),
+                    'objectAction' => 'view',
+                ];
+
+                return $this->postActionRedirect(
+                    [
+                        'returnUrl'       => $this->generateUrl('mautic_contact_action', $viewParameters),
+                        'viewParameters'  => $viewParameters,
+                        'contentTemplate' => 'MauticLeadBundle:Lead:view',
+                        'passthroughVars' => [
+                            'closeModal' => 1,
+                        ],
+                    ]
+                );
+            }
+        }
+
+        $tmpl = $this->request->get('tmpl', 'index');
+
+        return $this->delegateView(
+            [
+                'viewParameters' => [
+                    'tmpl'         => $tmpl,
+                    'leads'        => $leads,
+                    'searchValue'  => $search,
+                    'action'       => $action,
+                    'form'         => $form->createView(),
+                    'currentRoute' => $this->generateUrl(
+                        'mautic_contact_action',
+                        [
+                            'objectAction' => 'merge',
+                            'objectId'     => $mainLead->getId(),
+                        ]
+                    ),
+                ],
+                'contentTemplate' => 'MauticLeadBundle:Lead:merge.html.php',
+                'passthroughVars' => [
+                    'route'  => false,
+                    'target' => ($tmpl == 'update') ? '.lead-merge-options' : null,
+                ],
+            ]
+        );
+    }
+
 }
