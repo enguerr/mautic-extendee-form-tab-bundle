@@ -28,11 +28,20 @@ use Symfony\Component\Routing\RouterInterface;
 class SubmissionController extends FormController
 {
 
-    private function getPostActionVars($returnUrl)
+    private function getPostActionVars($formId)
     {
+        $session  = $this->get('session');
+        $viewParameters = [
+            'objectId' => $formId,
+            'page'     => $session->get('mautic.formresult.page', 1)
+        ];
         return [
-            'returnUrl'       => $returnUrl,
+            'returnUrl'       => $this->generateUrl('mautic_form_results', $viewParameters),
             'contentTemplate' => 'MauticFormBundle:Result:index',
+            'viewParameters'  => $viewParameters,
+            'passthroughVars' => [
+                'closeModal' => 1,
+            ],
         ];
     }
 
@@ -56,12 +65,15 @@ class SubmissionController extends FormController
      */
     public function editAction($formId, $objectId = 0)
     {
-        $formId    = (empty($formId)) ? InputHelper::int($this->request->get('formId')) : $formId;
-        $contactId = InputHelper::int($this->request->get('contactId'));
+
+        $formId        = (empty($formId)) ? InputHelper::int($this->request->get('formId')) : $formId;
+        $isContactPage = $contactId = InputHelper::int($this->request->get('contactId'));
+
 
         /** @var SubmissionModel $submissionModel */
         $submissionModel = $this->getModel('form.submission');
         $objectId        = (empty($objectId)) ? InputHelper::int($this->request->get('objectId')) : $objectId;
+        $submission      = '';
         if ($objectId) {
             /** @var Submission $submission */
             $submission = $submissionModel->getEntity($objectId);
@@ -73,12 +85,11 @@ class SubmissionController extends FormController
         $template = null;
         $router   = $this->get('router');
 
-        $formResultUrl = $this->generateUrl('mautic_form_results', ['objectId' => $formId]);
 
         if ($form === null) {
             return $this->postActionRedirect(
                 array_merge(
-                    $this->getPostActionVars($formResultUrl),
+                    $this->getPostActionVars($formId),
                     [
                         'flashes' => [
                             [
@@ -112,6 +123,9 @@ class SubmissionController extends FormController
         $flashes    = [];
         $closeModal = false;
         $new        = false;
+        if ($submission && !$contactId && $submission->getLead()) {
+            $contactId = $submission->getLead()->getId();
+        }
         if ($this->request->getMethod() == 'POST') {
             $post                 = $this->request->request->get('mauticform');
             $post['submissionId'] = $objectId;
@@ -156,19 +170,21 @@ class SubmissionController extends FormController
         $html = preg_replace('/<form(.*)>/', '', $html, 1);
         $html = preg_replace('/<button type="submit"(.*)<\/button>/', '', $html, 1);
         $html = str_replace('</form>', '', $html);
-
         // prepopulate
         if (!empty($submission)) {
             $this->populateValuesWithLead($submission, $html);
-            if (!$contactId) {
-                $contactId = $submission->getLead()->getId();
-            }
         }
 
         if ($closeModal) {
             /** @var FormTabHelper $formTabHelper */
             $formTabHelper = $this->get('mautic.extendee.form.tab.helper');
             $formTabHelper->setResultCache('');
+
+            if (!$isContactPage) {
+                return $this->postActionRedirect(
+                    $this->getPostActionVars($formId)
+                );
+            } else {
                 return $this->delegateView(
                     [
                         'passthroughVars' => [
@@ -178,6 +194,7 @@ class SubmissionController extends FormController
                         ],
                     ]
                 );
+            }
         }
 
         return $this->delegateView(
@@ -217,8 +234,8 @@ class SubmissionController extends FormController
             ) {
                 return $this->accessDenied();
             } else {
-                $id = $entity->getId();
-                $form = $entity->getForm();
+                $id        = $entity->getId();
+                $form      = $entity->getForm();
                 $contactId = $entity->getLead()->getId();
                 $model->deleteEntity($entity);
 
@@ -233,6 +250,7 @@ class SubmissionController extends FormController
         } //else don't do anything
         $formTabHelper = $this->get('mautic.extendee.form.tab.helper');
         $formTabHelper->setResultCache('');
+
         return $this->delegateView(
             [
                 'passthroughVars' => [

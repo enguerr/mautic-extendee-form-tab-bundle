@@ -60,28 +60,35 @@ class InjectCustomContentSubscriber extends CommonSubscriber
      */
     public function injectViewButtons(CustomButtonEvent $event)
     {
-      /*  $this->addButtonGenerator(
-            $event,
-            ButtonHelper::LOCATION_PAGE_ACTIONS,
-            'new',
-            'mautic.core.form.new',
-            'fa fa-plus',
-            'mautic_form_results',
-            1000,
-            true
-        );*/
+        /*  $this->addButtonGenerator(
+              $event,
+              ButtonHelper::LOCATION_PAGE_ACTIONS,
+              'new',
+              'mautic.core.form.new',
+              'fa fa-plus',
+              'mautic_form_results',
+              1000,
+              true
+          );*/
 
-        $this->addButtonGenerator(
-            $event,
-            ButtonHelper::LOCATION_LIST_ACTIONS,
-            'edit',
-            'mautic.core.form.edit',
-            'fa fa-pencil-square-o',
-            'mautic_form_results',
-            1000,
-            true,
-            '#MauticSharedModal'
-        );
+        if (method_exists($event, 'getItem') && is_array($event->getItem())) {
+            $header = $this->translator->trans(
+                'mautic.extendee.form.tab.edit.simple'
+            );
+            $this->addButtonGenerator(
+                $event,
+                ButtonHelper::LOCATION_LIST_ACTIONS,
+                'edit',
+                'mautic.core.form.edit',
+                'fa fa-pencil-square-o',
+                'mautic_form_results',
+                1000,
+                true,
+                '#MauticSharedModal',
+                $header
+            );
+        }
+
     }
 
     /**
@@ -146,18 +153,18 @@ class InjectCustomContentSubscriber extends CommonSubscriber
         if (!$formId) {
             return;
         }
-        $parameters =          [
-            'formId'     => $formId,
+        $parameters = [
+            'formId' => $formId,
         ];
 
         if (method_exists($event, 'getItem') && is_array($event->getItem())) {
-            $parameters['objectId'] =  $event->getItem()['id'];
+            $parameters['objectId'] = $event->getItem()['id'];
         }
-        $route    = $this->router->generate(
+        $route = $this->router->generate(
             'mautic_formtabsubmission_edit',
             $parameters
         );
-        $attr = [
+        $attr  = [
             'href'        => $route,
             'data-toggle' => 'ajax',
             'data-method' => 'POST',
@@ -176,6 +183,7 @@ class InjectCustomContentSubscriber extends CommonSubscriber
                 break;
         }
 
+
         $button =
             [
                 'attr'      => $attr,
@@ -184,7 +192,6 @@ class InjectCustomContentSubscriber extends CommonSubscriber
                 'priority'  => $priority,
                 'primary'   => $primary,
             ];
-
         $event
             ->addButton(
                 $button,

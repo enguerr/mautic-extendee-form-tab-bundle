@@ -129,7 +129,7 @@ class SaveSubmission
      *
      * @return array|bool
      */
-    public function saveSubmission($post, $server, Form $form, Request $request = null, $returnEvent = false, Lead $lead)
+    public function saveSubmission($post, $server, Form $form, Request $request = null, $returnEvent = false, Lead $lead = null)
     {
         if (!empty($post['submissionId'])) {
             $submissionId = (int) $post['submissionId'];
