@@ -123,6 +123,7 @@ class SubmissionController extends FormController
         $flashes    = [];
         $closeModal = false;
         $new        = false;
+        $error = '';
         if ($submission && !$contactId && $submission->getLead()) {
             $contactId = $submission->getLead()->getId();
         }
@@ -155,6 +156,7 @@ class SubmissionController extends FormController
                     $this->getModel('lead.lead')->getEntity($contactId)
                 );
                 if (!$result instanceof Submission && !empty($result['errors'])) {
+                    $error = $result['errors'];
                 } else {
                     $closeModal = true;
 
@@ -203,6 +205,7 @@ class SubmissionController extends FormController
                     'content' => $html,
                     'name'    => $form->getName(),
                     'form'    => $formView->createView(),
+                    'error'=>$error
                 ],
                 'contentTemplate' => 'MauticExtendeeFormTabBundle::form.html.php',
             ]
@@ -365,150 +368,6 @@ class SubmissionController extends FormController
                 }
 
                 break;
-        }
-    }
-
-    /**
-     * @return \Symfony\Component\HttpFoundation\RedirectResponse|Response
-     */
-    public function submitAction()
-    {
-        if ($this->request->getMethod() !== 'POST') {
-            return $this->accessDenied();
-        }
-        $action = $this->generateUrl('mautic_contact_action', ['objectAction' => 'merge', 'objectId' => 1]);
-
-        $formView = $this->get('form.factory')->create(
-            'form_tab_submission',
-            [],
-            [
-                'action' => $action,
-            ]
-        );
-        if ($this->request->getMethod() == 'POST') {
-            $valid = true;
-            if ($this->isFormCancelled($formView)) {
-                $viewParameters = [
-                    'objectId'     => 1,
-                    'objectAction' => 'view',
-                ];
-
-                return $this->postActionRedirect(
-                    [
-                        'returnUrl'       => $this->generateUrl('mautic_contact_action', $viewParameters),
-                        'viewParameters'  => $viewParameters,
-                        'contentTemplate' => 'MauticLeadBundle:Lead:view',
-                        'passthroughVars' => [
-                            'closeModal' => 1, //just in case in quick form
-                        ],
-                    ]
-                );
-            }
-        }
-        $form = null;
-        $post = $this->request->request->get('mauticform');
-        if ($this->request->get('submissionId', '')) {
-            $post['submissionId'] = $this->request->get('submissionId', '');
-        }
-        $server = $this->request->server->all();
-        $return = (isset($server['HTTP_REFERER'])) ? $server['HTTP_REFERER'] : false;
-
-        if (!empty($return)) {
-            //remove mauticError and mauticMessage from the referer so it doesn't get sent back
-            $return = InputHelper::url($return, null, null, null, ['mauticError', 'mauticMessage'], true);
-            $query  = (strpos($return, '?') === false) ? '?' : '&';
-        }
-
-        $translator = $this->get('translator');
-
-        if (!isset($post['formId']) && isset($post['formid'])) {
-            $post['formId'] = $post['formid'];
-        } elseif (isset($post['formId']) && !isset($post['formid'])) {
-            $post['formid'] = $post['formId'];
-        }
-
-        //check to ensure there is a formId
-        if (!isset($post['formId'])) {
-            $error = $translator->trans('mautic.form.submit.error.unavailable', [], 'flashes');
-        } else {
-            $formModel = $this->getModel('form.form');
-            /** @var Form $form */
-            $form = $formModel->getEntity($post['formId']);
-
-            //check to see that the form was found
-            if ($form === null) {
-                $error = $translator->trans('mautic.form.submit.error.unavailable', [], 'flashes');
-            } else {
-                //get what to do immediately after successful post
-                //check to ensure the form is published
-                $status             = $form->getPublishStatus();
-                $dateTemplateHelper = $this->get('mautic.helper.template.date');
-                if ($status == 'pending') {
-                    $error = $translator->trans(
-                        'mautic.form.submit.error.pending',
-                        [
-                            '%date%' => $dateTemplateHelper->toFull($form->getPublishUp()),
-                        ],
-                        'flashes'
-                    );
-                } elseif ($status == 'expired') {
-                    $error = $translator->trans(
-                        'mautic.form.submit.error.expired',
-                        [
-                            '%date%' => $dateTemplateHelper->toFull($form->getPublishDown()),
-                        ],
-                        'flashes'
-                    );
-                } elseif ($status != 'published') {
-                    $error = $translator->trans('mautic.form.submit.error.unavailable', [], 'flashes');
-                } else {
-
-                    // remove action
-                    $actions = $form->getActions();;
-                    foreach ($actions as $action) {
-                        $form->removeAction($action);
-                    }
-                    // remove matching field
-                    foreach ($form->getFields() as &$field) {
-                        $field->setLeadField('');
-                    }
-                    /** @var SaveSubmission $saveSubmission */
-                    $saveSubmission = $this->get('mautic.extendee.form.tab.service.save_submission');
-                    $result         = $saveSubmission->saveSubmission($post, $server, $form, $this->request, true);
-                    if (!empty($result['errors'])) {
-                        $error = ($result['errors']) ?
-                            $this->get('translator')->trans('mautic.form.submission.errors').'<br /><ol><li>'.
-                            implode('</li><li>', $result['errors']).'</li></ol>' : false;
-                    }
-                }
-            }
-
-            /* $viewParameters = [
-                 'objectId'     => 1,
-                 'objectAction' => 'view',
-             ];
-
-             return $this->postActionRedirect(
-                 [
-                     'returnUrl'       => $this->generateUrl('mautic_contact_action', $viewParameters),
-                     'viewParameters'  => $viewParameters,
-                     'contentTemplate' => 'MauticLeadBundle:Lead:view',
-                     'passthroughVars' => [
-                         'activeLink'    => '#mautic_contact_index',
-                         'mauticContent' => 'lead',
-                         'closeModal'    => 1, //just in case in quick form
-                     ],
-                 ]
-             );*/
-
-            if (!empty($error)) {
-                $data['errorMessage'] = implode('', $error);
-            } else {
-                $data['successMessage'] = $this->get('translator')->trans('mautic.core.success');
-            }
-            $response = json_encode($data);
-
-            return $this->render('MauticFormBundle::messenger.html.php', ['response' => $response]);
         }
     }
 

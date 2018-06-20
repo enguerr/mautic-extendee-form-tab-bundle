@@ -148,8 +148,10 @@ class InjectCustomContentSubscriber extends CommonSubscriber
         $target = null,
         $header = ''
     ) {
-        $formId = $event->getRequest()->get('objectId', '');
-
+        $formId = $event->getRequest()->get('formId', '');
+        if (!$formId) {
+            $formId = $event->getRequest()->get('objectId', '');
+        }
         if (!$formId) {
             return;
         }
