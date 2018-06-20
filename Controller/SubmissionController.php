@@ -11,18 +11,40 @@
 
 namespace MauticPlugin\MauticExtendeeFormTabBundle\Controller;
 
-use Mautic\CoreBundle\Controller\CommonController;
+use Mautic\CoreBundle\Controller\FormController;
 use Mautic\CoreBundle\Helper\InputHelper;
 use Mautic\FormBundle\Entity\Form;
+use Mautic\FormBundle\Entity\Submission;
 use Mautic\FormBundle\Model\FormModel;
-use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\SubmissionType;
+use Mautic\FormBundle\Model\SubmissionModel;
+use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\Routing\RouterInterface;
 
 /**
  * Class SubmissionController.
  */
-class SubmissionController extends CommonController
+class SubmissionController extends FormController
 {
+
+    private function getPostActionVars($returnUrl)
+    {
+        return [
+            'returnUrl'       => $returnUrl,
+            'contentTemplate' => 'MauticFormBundle:Result:index',
+        ];
+    }
+
+    private function getRedirectUrl()
+    {
+        // /** @var RouterInterface $router */
+        // $router = $this->get('router');
+        // $router->getRouteCollection()        if (0 === strpos($router->getRoute(), 'mautic_email_action') && $this->request->get('objectAction') == 'view') {
+        //
+        // }
+    }
+
     /**
      * Gives a preview of the form.
      *
@@ -34,34 +56,128 @@ class SubmissionController extends CommonController
      */
     public function editAction($formId, $objectId = 0)
     {
-        /** @var FormModel $model */
-        $formId   = (empty($formId)) ? InputHelper::int($this->request->get('formId')) : $formId;
-        $objectId = (empty($objectId)) ? InputHelper::int($this->request->get('objectId')) : $objectId;
+        $formId    = (empty($formId)) ? InputHelper::int($this->request->get('formId')) : $formId;
+        $contactId = InputHelper::int($this->request->get('contactId'));
+
+        /** @var SubmissionModel $submissionModel */
+        $submissionModel = $this->getModel('form.submission');
+        $objectId        = (empty($objectId)) ? InputHelper::int($this->request->get('objectId')) : $objectId;
+        if ($objectId) {
+            /** @var Submission $submission */
+            $submission = $submissionModel->getEntity($objectId);
+        }
+
         /** @var FormModel $model */
         $model    = $this->getModel('form.form');
         $form     = $model->getEntity($formId);
         $template = null;
         $router   = $this->get('router');
 
+        $formResultUrl = $this->generateUrl('mautic_form_results', ['objectId' => $formId]);
 
-        if ($form === null || !$form->isPublished()) {
-            return $this->notFound();
-        } else {
-            $html = $model->getContent($form, true, false);
-            $formView = $this->get('form.factory')->create(
-                'form_tab_submission',
-                [],
-                [
-                ]
+        if ($form === null) {
+            return $this->postActionRedirect(
+                array_merge(
+                    $this->getPostActionVars($formResultUrl),
+                    [
+                        'flashes' => [
+                            [
+                                'type' => 'error',
+                                'msg'  => 'mautic.form.error.notfound',
+                            ],
+                        ],
+                    ]
+                )
             );
-            $action = $router->generate(
-                'mautic_formtab_postresults',
-                [
-                    'formId'       => $form->getId(),
-                    'submissionId' => $objectId,
-                ]
-            );
-            $html   = preg_replace('/action="([^"]+)/', 'action="'.$action, $html, 1);
+        }
+
+        $html = $model->getContent($form, true, false);
+
+        $action = $router->generate(
+            'mautic_formtabsubmission_edit',
+            [
+                'formId'    => $form->getId(),
+                'objectId'  => $objectId,
+                'contactId' => $contactId,
+            ]
+        );
+
+        $formView   = $this->get('form.factory')->create(
+            'form_tab_submission',
+            [],
+            [
+                'action' => $action,
+            ]
+        );
+        $flashes    = [];
+        $closeModal = false;
+        $new        = false;
+        if ($this->request->getMethod() == 'POST') {
+            $post                 = $this->request->request->get('mauticform');
+            $post['submissionId'] = $objectId;
+            if (!$objectId) {
+                $new = true;
+            }
+
+            $server = $this->request->server->all();
+            $return = (isset($server['HTTP_REFERER'])) ? $server['HTTP_REFERER'] : false;
+
+            if (!empty($return)) {
+                //remove mauticError and mauticMessage from the referer so it doesn't get sent back
+                $return = InputHelper::url($return, null, null, null, ['mauticError', 'mauticMessage'], true);
+                $query  = (strpos($return, '?') === false) ? '?' : '&';
+            }
+
+            $valid = true;
+            if (!$this->isFormCancelled($formView)) {
+                /** @var SaveSubmission $saveSubmission */
+                $saveSubmission = $this->get('mautic.extendee.form.tab.service.save_submission');
+                $result         = $saveSubmission->saveSubmission(
+                    $post,
+                    $server,
+                    $form,
+                    $this->request,
+                    true,
+                    $this->getModel('lead.lead')->getEntity($contactId)
+                );
+                if (!$result instanceof Submission && !empty($result['errors'])) {
+                } else {
+                    $closeModal = true;
+
+                }
+            } else {
+                return new JsonResponse(['closeModal' => 1]);;
+            }
+        }
+
+
+        // hide fomr start/end and button, because we wanna use controller view
+        //$html     = preg_replace('/action="([^"]+)/', 'action="'.$action, $html, 1);
+        $html = preg_replace('/<form(.*)>/', '', $html, 1);
+        $html = preg_replace('/<button type="submit"(.*)<\/button>/', '', $html, 1);
+        $html = str_replace('</form>', '', $html);
+
+        // prepopulate
+        if (!empty($submission)) {
+            $this->populateValuesWithLead($submission, $html);
+            if (!$contactId) {
+                $contactId = $submission->getLead()->getId();
+            }
+        }
+
+        if ($closeModal) {
+            /** @var FormTabHelper $formTabHelper */
+            $formTabHelper = $this->get('mautic.extendee.form.tab.helper');
+            $formTabHelper->setResultCache('');
+                return $this->delegateView(
+                    [
+                        'passthroughVars' => [
+                            'target'     => '#form-results-'.$form->getId(),
+                            'newContent' => $formTabHelper->getFormWithResult($form, $contactId)['content'],
+                            'closeModal' => 1,
+                        ],
+                    ]
+                );
         }
 
         return $this->delegateView(
@@ -69,15 +185,169 @@ class SubmissionController extends CommonController
                 'viewParameters'  => [
                     'content' => $html,
                     'name'    => $form->getName(),
-                    'form'=>    $formView->createView(),
+                    'form'    => $formView->createView(),
                 ],
                 'contentTemplate' => 'MauticExtendeeFormTabBundle::form.html.php',
+            ]
+        );
+    }
+
+    /**
+     * @param $objectId
+     *
+     * @return array|JsonResponse|\Symfony\Component\HttpFoundation\RedirectResponse|\Symfony\Component\HttpFoundation\Response
+     */
+    public function deleteAction($objectId)
+    {
+        $flashes = [];
+
+        if ($this->request->getMethod() == 'POST') {
+            $model = $this->getModel('form.submission');
+
+            // Find the result
+            $entity = $model->getEntity($objectId);
+
+            if ($entity === null) {
+                return $this->accessDenied();
+            } elseif (!$this->get('mautic.security')->hasEntityAccess(
+                'form:forms:editown',
+                'form:forms:editother',
+                $entity->getCreatedBy()
+            )
+            ) {
+                return $this->accessDenied();
+            } else {
+                $id = $entity->getId();
+                $form = $entity->getForm();
+                $contactId = $entity->getLead()->getId();
+                $model->deleteEntity($entity);
+
+                $flashes[] = [
+                    'type'    => 'notice',
+                    'msg'     => 'mautic.core.notice.deleted',
+                    'msgVars' => [
+                        '%name%' => '#'.$id,
+                    ],
+                ];
+            }
+        } //else don't do anything
+        $formTabHelper = $this->get('mautic.extendee.form.tab.helper');
+        $formTabHelper->setResultCache('');
+        return $this->delegateView(
+            [
                 'passthroughVars' => [
-                    'activeLink'    => '#mautic_contact_index',
-                    'mauticContent' => 'lead',
+                    'target'     => '#form-results-'.$form->getId(),
+                    'newContent' => $formTabHelper->getFormWithResult($form, $contactId)['content'],
+                    'closeModal' => 1,
                 ],
             ]
         );
+    }
+
+    /**
+     * @param      $formHtml
+     */
+    public function populateValuesWithLead(Submission $submission, &$formHtml)
+    {
+
+        $form     = $submission->getForm();
+        $formName = $form->generateFormName();
+
+        $fields = $form->getFields();
+        /** @var \Mautic\FormBundle\Entity\Field $f */
+        foreach ($fields as $f) {
+            if (!empty($submission->getResults()[$f->getAlias()])) {
+                $value = $submission->getResults()[$f->getAlias()];
+                $this->populateField($f, $value, $formName, $formHtml);
+            }
+        }
+    }
+
+    /**
+     * @param $field
+     * @param $value
+     * @param $formName
+     * @param $formHtml
+     */
+    public function populateField($field, $value, $formName, &$formHtml)
+    {
+        $alias = $field->getAlias();
+
+        switch ($field->getType()) {
+            case 'text':
+            case 'email':
+            case 'hidden':
+                if (preg_match(
+                    '/<input(.*?)id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)value="(.*?)"(.*?)\/>/i',
+                    $formHtml,
+                    $match
+                )) {
+                    $replace  = '<input'.$match[1].'id="mauticform_input_'.$formName.'_'.$alias.'"'.$match[2].'value="'.$this->sanitizeValue(
+                            $value
+                        ).'"'
+                        .$match[4].'/>';
+                    $formHtml = str_replace($match[0], $replace, $formHtml);
+                }
+                break;
+            case 'textarea':
+                if (preg_match(
+                    '/<textarea(.*?)id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)>(.*?)<\/textarea>/i',
+                    $formHtml,
+                    $match
+                )) {
+                    $replace  = '<textarea'.$match[1].'id="mauticform_input_'.$formName.'_'.$alias.'"'.$match[2].'>'.$this->sanitizeValue(
+                            $value
+                        ).'</textarea>';
+                    $formHtml = str_replace($match[0], $replace, $formHtml);
+                }
+                break;
+            case 'checkboxgrp':
+                if (is_string($value) && strrpos($value, '|') > 0) {
+                    $value = explode('|', $value);
+                } elseif (!is_array($value)) {
+                    $value = [$value];
+                }
+
+                foreach ($value as $val) {
+                    $val = $this->sanitizeValue($val);
+                    if (preg_match(
+                        '/<input(.*?)id="mauticform_checkboxgrp_checkbox(.*?)"(.*?)value="'.$val.'"(.*?)\/>/i',
+                        $formHtml,
+                        $match
+                    )) {
+                        $replace  = '<input'.$match[1].'id="mauticform_checkboxgrp_checkbox'.$match[2].'"'.$match[3].'value="'.$val.'"'
+                            .$match[4].' checked />';
+                        $formHtml = str_replace($match[0], $replace, $formHtml);
+                    }
+                }
+                break;
+            case 'radiogrp':
+                $value = $this->sanitizeValue($value);
+                if (preg_match(
+                    '/<input(.*?)id="mauticform_radiogrp_radio(.*?)"(.*?)value="'.$value.'"(.*?)\/>/i',
+                    $formHtml,
+                    $match
+                )) {
+                    $replace  = '<input'.$match[1].'id="mauticform_radiogrp_radio'.$match[2].'"'.$match[3].'value="'.$value.'"'.$match[4]
+                        .' checked />';
+                    $formHtml = str_replace($match[0], $replace, $formHtml);
+                }
+                break;
+            case 'select':
+            case 'country':
+                $regex = '/<select\s*id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)<\/select>/is';
+                if (preg_match($regex, $formHtml, $match)) {
+                    $origText = $match[0];
+                    $replace  = str_replace(
+                        '<option value="'.$this->sanitizeValue($value).'">',
+                        '<option value="'.$this->sanitizeValue($value).'" selected="selected">',
+                        $origText
+                    );
+                    $formHtml = str_replace($origText, $replace, $formHtml);
+                }
+
+                break;
+        }
     }
 
     /**
@@ -87,6 +357,35 @@ class SubmissionController extends CommonController
     {
         if ($this->request->getMethod() !== 'POST') {
             return $this->accessDenied();
+        }
+        $action = $this->generateUrl('mautic_contact_action', ['objectAction' => 'merge', 'objectId' => 1]);
+
+        $formView = $this->get('form.factory')->create(
+            'form_tab_submission',
+            [],
+            [
+                'action' => $action,
+            ]
+        );
+        if ($this->request->getMethod() == 'POST') {
+            $valid = true;
+            if ($this->isFormCancelled($formView)) {
+                $viewParameters = [
+                    'objectId'     => 1,
+                    'objectAction' => 'view',
+                ];
+
+                return $this->postActionRedirect(
+                    [
+                        'returnUrl'       => $this->generateUrl('mautic_contact_action', $viewParameters),
+                        'viewParameters'  => $viewParameters,
+                        'contentTemplate' => 'MauticLeadBundle:Lead:view',
+                        'passthroughVars' => [
+                            'closeModal' => 1, //just in case in quick form
+                        ],
+                    ]
+                );
+            }
         }
         $form = null;
         $post = $this->request->request->get('mauticform');
@@ -185,7 +484,7 @@ class SubmissionController extends CommonController
              );*/
 
             if (!empty($error)) {
-                $data['errorMessage'] = implode('',$error);
+                $data['errorMessage'] = implode('', $error);
             } else {
                 $data['successMessage'] = $this->get('translator')->trans('mautic.core.success');
             }
@@ -196,184 +495,14 @@ class SubmissionController extends CommonController
     }
 
     /**
-     * Generates merge form and action.
+     * @param string $value
      *
-     * @param   $objectId
-     *
-     * @return array|JsonResponse|\Symfony\Component\HttpFoundation\RedirectResponse|\Symfony\Component\HttpFoundation\Response
+     * @return string
      */
-    public function mergeAction($objectId)
+    public function sanitizeValue($value)
     {
-        /** @var \Mautic\LeadBundle\Model\LeadModel $model */
-        $model    = $this->getModel('lead');
-        $mainLead = $model->getEntity($objectId);
-        $page     = $this->get('session')->get('mautic.lead.page', 1);
-
-        //set the return URL
-        $returnUrl = $this->generateUrl('mautic_contact_index', ['page' => $page]);
-
-        $postActionVars = [
-            'returnUrl'       => $returnUrl,
-            'viewParameters'  => ['page' => $page],
-            'contentTemplate' => 'MauticLeadBundle:Lead:index',
-            'passthroughVars' => [
-                'activeLink'    => '#mautic_contact_index',
-                'mauticContent' => 'lead',
-            ],
-        ];
-
-        if ($mainLead === null) {
-            return $this->postActionRedirect(
-                array_merge(
-                    $postActionVars,
-                    [
-                        'flashes' => [
-                            [
-                                'type'    => 'error',
-                                'msg'     => 'mautic.lead.lead.error.notfound',
-                                'msgVars' => ['%id%' => $objectId],
-                            ],
-                        ],
-                    ]
-                )
-            );
-        }
-
-        //do some default filtering
-        $session = $this->get('session');
-        $search  = $this->request->get('search', $session->get('mautic.lead.merge.filter', ''));
-        $session->set('mautic.lead.merge.filter', $search);
-        $leads = [];
-
-        if (!empty($search)) {
-            $filter = [
-                'string' => $search,
-                'force'  => [
-                    [
-                        'column' => 'l.date_identified',
-                        'expr'   => 'isNotNull',
-                        'value'  => $mainLead->getId(),
-                    ],
-                    [
-                        'column' => 'l.id',
-                        'expr'   => 'neq',
-                        'value'  => $mainLead->getId(),
-                    ],
-                ],
-            ];
-
-            $leads = $model->getEntities(
-                [
-                    'limit'          => 25,
-                    'filter'         => $filter,
-                    'orderBy'        => 'l.firstname,l.lastname,l.company,l.email',
-                    'orderByDir'     => 'ASC',
-                    'withTotalCount' => false,
-                ]
-            );
-        }
-
-        $leadChoices = [];
-        foreach ($leads as $l) {
-            $leadChoices[$l->getId()] = $l->getPrimaryIdentifier();
-        }
-
-        $action = $this->generateUrl('mautic_contact_action', ['objectAction' => 'merge', 'objectId' => $mainLead->getId()]);
-
-        $form = $this->get('form.factory')->create(
-            'lead_merge',
-            [],
-            [
-                'action' => $action,
-                'leads'  => $leadChoices,
-            ]
-        );
-
-        if ($this->request->getMethod() == 'POST') {
-            $valid = true;
-            if (!$this->isFormCancelled($form)) {
-                if ($valid = $this->isFormValid($form)) {
-                    $data      = $form->getData();
-                    $secLeadId = $data['lead_to_merge'];
-                    $secLead   = $model->getEntity($secLeadId);
-
-                    if ($secLead === null) {
-                        return $this->postActionRedirect(
-                            array_merge(
-                                $postActionVars,
-                                [
-                                    'flashes' => [
-                                        [
-                                            'type'    => 'error',
-                                            'msg'     => 'mautic.lead.lead.error.notfound',
-                                            'msgVars' => ['%id%' => $secLead->getId()],
-                                        ],
-                                    ],
-                                ]
-                            )
-                        );
-                    } elseif (
-                        !$this->get('mautic.security')->hasEntityAccess('lead:leads:editown', 'lead:leads:editother', $mainLead->getPermissionUser())
-                        || !$this->get('mautic.security')->hasEntityAccess('lead:leads:editown', 'lead:leads:editother', $secLead->getPermissionUser())
-                    ) {
-                        return $this->accessDenied();
-                    } elseif ($model->isLocked($mainLead)) {
-                        //deny access if the entity is locked
-                        return $this->isLocked($postActionVars, $secLead, 'lead');
-                    } elseif ($model->isLocked($secLead)) {
-                        //deny access if the entity is locked
-                        return $this->isLocked($postActionVars, $secLead, 'lead');
-                    }
-
-                    //Both leads are good so now we merge them
-                    $mainLead = $model->mergeLeads($mainLead, $secLead, false);
-                }
-            }
-
-            if ($valid) {
-                $viewParameters = [
-                    'objectId'     => $mainLead->getId(),
-                    'objectAction' => 'view',
-                ];
-
-                return $this->postActionRedirect(
-                    [
-                        'returnUrl'       => $this->generateUrl('mautic_contact_action', $viewParameters),
-                        'viewParameters'  => $viewParameters,
-                        'contentTemplate' => 'MauticLeadBundle:Lead:view',
-                        'passthroughVars' => [
-                            'closeModal' => 1,
-                        ],
-                    ]
-                );
-            }
-        }
-
-        $tmpl = $this->request->get('tmpl', 'index');
-
-        return $this->delegateView(
-            [
-                'viewParameters' => [
-                    'tmpl'         => $tmpl,
-                    'leads'        => $leads,
-                    'searchValue'  => $search,
-                    'action'       => $action,
-                    'form'         => $form->createView(),
-                    'currentRoute' => $this->generateUrl(
-                        'mautic_contact_action',
-                        [
-                            'objectAction' => 'merge',
-                            'objectId'     => $mainLead->getId(),
-                        ]
-                    ),
-                ],
-                'contentTemplate' => 'MauticLeadBundle:Lead:merge.html.php',
-                'passthroughVars' => [
-                    'route'  => false,
-                    'target' => ($tmpl == 'update') ? '.lead-merge-options' : null,
-                ],
-            ]
-        );
+        return str_replace(['"', '>', '<'], ['&quot;', '&gt;', '&lt;'], strip_tags(rawurldecode($value)));
     }
+
 
 }

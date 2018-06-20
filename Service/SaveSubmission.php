@@ -28,6 +28,7 @@ use Mautic\FormBundle\Helper\FormFieldHelper;
 use Mautic\FormBundle\Helper\FormUploader;
 use Mautic\FormBundle\Model\SubmissionModel;
 use Mautic\FormBundle\Validator\UploadFieldValidator;
+use Mautic\LeadBundle\Entity\Lead;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -128,10 +129,9 @@ class SaveSubmission
      *
      * @return array|bool
      */
-    public function saveSubmission($post, $server, Form $form, Request $request = null, $returnEvent = false)
+    public function saveSubmission($post, $server, Form $form, Request $request = null, $returnEvent = false, Lead $lead)
     {
-
-        if (isset($post['submissionId'])) {
+        if (!empty($post['submissionId'])) {
             $submissionId = (int) $post['submissionId'];
             $submission   = $this->submissionModel->getEntity($submissionId);
         }
@@ -141,7 +141,7 @@ class SaveSubmission
             $submission = new Submission();
             $submission->setDateSubmitted(new \DateTime());
             $submission->setForm($form);
-
+            $submission->setLead($lead);
             //$submission->setPage($page);
             $ipAddress = $this->ipLookupHelper->getIpAddress();
             $submission->setIpAddress($ipAddress);
@@ -334,7 +334,7 @@ class SaveSubmission
         // Save the submission
         $this->saveUpdateEntity($submission);
 
-        if (!$form->isStandalone()) {
+       /* if (!$form->isStandalone()) {
             // Find and add the lead to the associated campaigns
             $campaigns = $this->campaignModel->getCampaignsByForm($form);
             if (!empty($campaigns)) {
@@ -342,9 +342,9 @@ class SaveSubmission
                     $this->campaignModel->addLead($campaign, $lead);
                 }
             }
-        }
+        }*/
 
-        return true;
+        return $submission;
     }
 
     /**
@@ -391,7 +391,6 @@ class SaveSubmission
     {
         //add the results
         $results                  = $entity->getResults();
-
         if (!empty($results)) {
             if( $entity->getId()){
                 $this->entity->getConnection()->update($this->submissionModel->getRepository()->getResultsTableName($entity->getForm()->getId(), $entity->getForm()->getAlias()), $results, [

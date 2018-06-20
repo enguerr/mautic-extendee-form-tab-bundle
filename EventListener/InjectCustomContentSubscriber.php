@@ -60,7 +60,7 @@ class InjectCustomContentSubscriber extends CommonSubscriber
      */
     public function injectViewButtons(CustomButtonEvent $event)
     {
-        $this->addButtonGenerator(
+      /*  $this->addButtonGenerator(
             $event,
             ButtonHelper::LOCATION_PAGE_ACTIONS,
             'new',
@@ -69,7 +69,7 @@ class InjectCustomContentSubscriber extends CommonSubscriber
             'mautic_form_results',
             1000,
             true
-        );
+        );*/
 
         $this->addButtonGenerator(
             $event,
@@ -153,7 +153,6 @@ class InjectCustomContentSubscriber extends CommonSubscriber
         if (method_exists($event, 'getItem') && is_array($event->getItem())) {
             $parameters['objectId'] =  $event->getItem()['id'];
         }
-        $parameters['objectId'] = 1;
         $route    = $this->router->generate(
             'mautic_formtabsubmission_edit',
             $parameters

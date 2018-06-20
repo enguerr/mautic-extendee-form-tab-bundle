@@ -11,13 +11,9 @@ return [
                 'path'       => '/formtab/submission/edit/{formId}/{objectId}',
                 'controller' => 'MauticExtendeeFormTabBundle:Submission:edit',
             ],
-            'mautic_formtabsubmission_edit2' => [
-                'path'       => '/formtab/submission/merge/{objectId}',
-                'controller' => 'MauticExtendeeFormTabBundle:Submission:merge',
-            ],
-            'mautic_formtab_postresults' => [
-                'path'       => '/formtab/submission/submit',
-                'controller' => 'MauticExtendeeFormTabBundle:Submission:submit',
+            'mautic_formtabsubmission_delete' => [
+                'path'       => '/formtab/submission/delete/{objectId}',
+                'controller' => 'MauticExtendeeFormTabBundle:Submission:delete',
             ],
         ],
     ],

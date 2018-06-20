@@ -12,7 +12,6 @@
 
 <?php echo $view['form']->start($form); ?>
 <?php echo $content; ?>
-
-        <?php echo $view['form']->row($form['buttons']); ?>
+<?php echo $view['form']->row($form['buttons']); ?>
 
 <?php echo $view['form']->end($form); ?>

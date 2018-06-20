@@ -16,6 +16,7 @@ use Mautic\CoreBundle\Helper\TemplatingHelper;
 use Mautic\CoreBundle\Helper\UserHelper;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
 use Mautic\FormBundle\Entity\Form;
+use Mautic\FormBundle\Entity\Submission;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
 use Mautic\LeadBundle\Entity\Lead;
@@ -93,7 +94,7 @@ class FormTabHelper
         $this->security          = $security;
         $this->submissionModel   = $submissionModel;
         $this->integrationHelper = $integrationHelper;
-        $this->leadModel = $leadModel;
+        $this->leadModel         = $leadModel;
     }
 
     /**
@@ -118,8 +119,77 @@ class FormTabHelper
             'MauticExtendeeFormTabBundle:Result:tab-content.html.php',
             [
                 'leadForms' => $leadForms,
+
             ]
         );
+    }
+
+    /**
+     * @param Submission $submission
+     * @param            $contactId
+     *
+     * @return string
+     */
+    public function getItemContentBySubmission(Submission $submission, $contactId, $new = false)
+    {
+        $result = $this->getFormsWithResults($contactId, $submission->getId());
+
+        return $this->templatingHelper->getTemplating()->render(
+            'MauticExtendeeFormTabBundle:Result:item.html.php',
+            [
+                'item'      => $result[0]['results']['results'][0],
+                'form'      => $submission->getForm(),
+                'lead'      => $this->leadModel->getLead($contactId),
+                'canDelete' => $this->canDelete($submission->getForm()),
+                'skip'      => true,
+                'new'       => $new,
+            ]
+        );
+    }
+
+    public function getFormWithResult(Form $form, $contactId)
+    {
+        $viewOnlyFields = $this->formModel->getCustomComponents()['viewOnlyFields'];
+
+        $start      = 0;
+        $limit      = 9999;
+        $orderBy    = 's.date_submitted';
+        $orderByDir = 'DESC';
+        $filters    = [];
+        $filters[]  = ['column' => 's.form_id', 'expr' => 'eq', 'value' => $form->getId()];
+        $filters[]  = ['column' => 's.lead_id', 'expr' => 'eq', 'value' => $contactId];
+
+        //get the results
+        $submissionEntities = $this->submissionModel->getEntities(
+            [
+                'start'          => $start,
+                'limit'          => $limit,
+                'filter'         => ['force' => $filters],
+                'orderBy'        => $orderBy,
+                'orderByDir'     => $orderByDir,
+                'form'           => $form,
+                'withTotalCount' => true,
+            ]
+        );
+        if (empty($submissionEntities['count'])) {
+            return [];
+        }
+
+        return [
+            'results' => $submissionEntities,
+            'content' => $this->templatingHelper->getTemplating()->render(
+                'MauticExtendeeFormTabBundle:Result:list-condensed.html.php',
+                [
+                    'lead'           => $this->leadModel->getLead($contactId),
+                    'items'          => $submissionEntities['results'],
+                    'form'           => $form,
+                    'totalCount'     => $submissionEntities['count'],
+                    'canDelete'      => $this->canDelete($form),
+                    'viewOnlyFields' => $viewOnlyFields,
+                ]
+            ),
+        ];
+
     }
 
     /**
@@ -129,7 +199,7 @@ class FormTabHelper
      *
      * @return array
      */
-    public function getFormsWithResults($leadId)
+    public function getFormsWithResults($leadId, $submissionId = null)
     {
         if (!empty($this->resultCache)) {
             return $this->resultCache;
@@ -150,9 +220,8 @@ class FormTabHelper
 
         $lead = $this->leadModel->getLead($leadId);
 
-        $formResults    = [];
-        $viewOnlyFields = $this->formModel->getCustomComponents()['viewOnlyFields'];
-        $filters        = [];
+        $formResults = [];
+        $filters     = [];
         //  $filters[]      = ['column' => 'f.inContactTab', 'expr' => 'eq', 'value' => 1];
 
 
@@ -161,7 +230,7 @@ class FormTabHelper
                 'form:forms:editown',
                 'form:forms:editother',
                 'form:forms:viewown',
-                'form:forms:viewother'
+                'form:forms:viewother',
             ],
             'RETURN_ARRAY'
         );
@@ -180,56 +249,47 @@ class FormTabHelper
                 continue;
             }
 
-            $formResults[$key]['entity'] = $entity[0];
-
-            $start      = 0;
-            $limit      = 9999;
-            $orderBy    = 's.date_submitted';
-            $orderByDir = 'DESC';
-            $filters    = [];
-            $filters[]  = ['column' => 's.form_id', 'expr' => 'eq', 'value' => $form->getId()];
-            $filters[]  = ['column' => 's.lead_id', 'expr' => 'eq', 'value' => $leadId];
-            //get the results
-            $submissionEntities = $this->submissionModel->getEntities(
-                [
-                    'start'          => $start,
-                    'limit'          => $limit,
-                    'filter'         => ['force' => $filters],
-                    'orderBy'        => $orderBy,
-                    'orderByDir'     => $orderByDir,
-                    'form'           => $form,
-                    'withTotalCount' => true,
-                ]
-            );
-            if (empty($submissionEntities['count'])) {
-                unset($formResults[$key]);
+            $submissions =$this->getFormWithResult($form, $leadId);;
+            if (empty($submissions)) {
                 continue;
             }
-            $formResults[$key]['results'] = $submissionEntities;
-            $formResults[$key]['content'] = $this->templatingHelper->getTemplating()->render(
-                'MauticExtendeeFormTabBundle:Result:list-condensed.html.php',
-                [
-                    'lead'          =>  $lead,
-                    'items'          => $submissionEntities['results'],
-                    'filters'        => $filters,
-                    'form'           => $form,
-                    'page'           => 1,
-                    'totalCount'     => $submissionEntities['count'],
-                    'limit'          => $limit,
-                    'tmpl'           => '',
-                    'canDelete'      => $this->security->hasEntityAccess(
-                        'form:forms:editown',
-                        'form:forms:editother',
-                        $form->getCreatedBy()
-                    ),
-                    'permissions'    => $permissions,
-                    'viewOnlyFields' => $viewOnlyFields,
-                ]
-            );
+
+            $formResults[$key] = $submissions;
+            $formResults[$key]['entity'] = $entity[0];
         }
         $this->resultCache = array_values($formResults);
 
         return $this->resultCache;
+    }
+
+    /**
+     * @param Form $form
+     *
+     * @return bool
+     */
+    private function canDelete(Form $form)
+    {
+        return $this->security->hasEntityAccess(
+            'form:forms:editown',
+            'form:forms:editother',
+            $form->getCreatedBy()
+        );
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getResultCache()
+    {
+        return $this->resultCache;
+    }
+
+    /**
+     * @param mixed $resultCache
+     */
+    public function setResultCache($resultCache)
+    {
+        $this->resultCache = $resultCache;
     }
 
 

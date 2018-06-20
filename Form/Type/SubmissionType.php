@@ -33,7 +33,12 @@ class SubmissionType extends AbstractType
             ]
         );
 
+        if (!empty($options['action'])) {
+            $builder->setAction($options['action']);
+        }
+
     }
+
 
     /**
      * @return string

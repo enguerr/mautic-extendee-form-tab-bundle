@@ -1,4 +1,7 @@
 <!-- tabs controls -->
+<style>
+    .form-tab-results .input-group-addon {display:none;}
+</style>
 <ul class="nav nav-tabs pr-md pl-md mt-10">
     <?php foreach ($leadForms as $key => $leadForm): ?>
         <li<?php if ($key == 0): ?> class="active"<?php endif; ?>>
@@ -11,7 +14,7 @@
         </li>
     <?php endforeach; ?>
 </ul>
-<div class="tab-content pa-md">
+<div class="tab-content pa-md form-tab-results">
     <?php foreach ($leadForms as $key=>$leadForm):
         ?>
         <div class="tab-pane fade bdr-w-0  <?php if ($key == 0): ?> active in<?php endif; ?>" id="form-<?php echo $leadForm['entity']->getAlias()?>">
