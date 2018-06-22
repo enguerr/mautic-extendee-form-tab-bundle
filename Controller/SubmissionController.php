@@ -13,14 +13,12 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Controller;
 
 use Mautic\CoreBundle\Controller\FormController;
 use Mautic\CoreBundle\Helper\InputHelper;
-use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Entity\Submission;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\RouterInterface;
 
 /**
  * Class SubmissionController.
@@ -43,15 +41,6 @@ class SubmissionController extends FormController
                 'closeModal' => 1,
             ],
         ];
-    }
-
-    private function getRedirectUrl()
-    {
-        // /** @var RouterInterface $router */
-        // $router = $this->get('router');
-        // $router->getRouteCollection()        if (0 === strpos($router->getRoute(), 'mautic_email_action') && $this->request->get('objectAction') == 'view') {
-        //
-        // }
     }
 
     /**
@@ -303,6 +292,8 @@ class SubmissionController extends FormController
             case 'text':
             case 'email':
             case 'hidden':
+            case 'number':
+            case 'url':
                 if (preg_match(
                     '/<input(.*?)id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)value="(.*?)"(.*?)\/>/i',
                     $formHtml,
