@@ -19,7 +19,6 @@ use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Entity\Submission;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
-use Mautic\LeadBundle\Entity\Lead;
 use Mautic\LeadBundle\Model\LeadModel;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Integration\FormTabIntegration;
@@ -184,6 +183,8 @@ class FormTabHelper
                     'items'          => $submissionEntities['results'],
                     'form'           => $form,
                     'totalCount'     => $submissionEntities['count'],
+                    'canCreate'      => $this->canCreate($form),
+                    'canEdit'        => $this->canEdit($form),
                     'canDelete'      => $this->canDelete($form),
                     'viewOnlyFields' => $viewOnlyFields,
                 ]
@@ -224,11 +225,8 @@ class FormTabHelper
         $filters     = [];
         //  $filters[]      = ['column' => 'f.inContactTab', 'expr' => 'eq', 'value' => 1];
 
-
         $permissions = $this->security->isGranted(
             [
-                'form:forms:editown',
-                'form:forms:editother',
                 'form:forms:viewown',
                 'form:forms:viewother',
             ],
@@ -249,12 +247,12 @@ class FormTabHelper
                 continue;
             }
 
-            $submissions =$this->getFormWithResult($form, $leadId);;
+            $submissions = $this->getFormWithResult($form, $leadId);;
             if (empty($submissions)) {
                 continue;
             }
 
-            $formResults[$key] = $submissions;
+            $formResults[$key]           = $submissions;
             $formResults[$key]['entity'] = $entity[0];
         }
         $this->resultCache = array_values($formResults);
@@ -267,11 +265,53 @@ class FormTabHelper
      *
      * @return bool
      */
-    private function canDelete(Form $form)
+    public function canDelete(Form $form)
+    {
+        return $this->security->hasEntityAccess(
+            'form:forms:deleteown',
+            'form:forms:deleteother',
+            $form->getCreatedBy()
+        );
+    }
+
+    /**
+     * @param Form $form
+     *
+     * @return bool
+     */
+    public function canEdit(Form $form)
     {
         return $this->security->hasEntityAccess(
             'form:forms:editown',
             'form:forms:editother',
+            $form->getCreatedBy()
+        );
+    }
+
+    /**
+     * @param Form $form
+     *
+     * @return bool
+     */
+    public function canView(Form $form)
+    {
+        return $this->security->hasEntityAccess(
+            'form:forms:viewown',
+            'form:forms:viewother',
+            $form->getCreatedBy()
+        );
+    }
+
+    /**
+     * @param Form $form
+     *
+     * @return bool
+     */
+    public function canCreate(Form $form)
+    {
+        return $this->security->hasEntityAccess(
+            'form:forms:create',
+            'form:forms:create',
             $form->getCreatedBy()
         );
     }

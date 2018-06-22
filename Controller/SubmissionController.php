@@ -65,19 +65,18 @@ class SubmissionController extends FormController
      */
     public function editAction($formId, $objectId = 0)
     {
+        /** @var FormTabHelper $formTabHelper */
+        $formTabHelper = $this->get('mautic.extendee.form.tab.helper');
+        $formTabHelper->setResultCache('');
 
         $formId        = (empty($formId)) ? InputHelper::int($this->request->get('formId')) : $formId;
         $isContactPage = $contactId = InputHelper::int($this->request->get('contactId'));
 
 
+
         /** @var SubmissionModel $submissionModel */
         $submissionModel = $this->getModel('form.submission');
         $objectId        = (empty($objectId)) ? InputHelper::int($this->request->get('objectId')) : $objectId;
-        $submission      = '';
-        if ($objectId) {
-            /** @var Submission $submission */
-            $submission = $submissionModel->getEntity($objectId);
-        }
 
         /** @var FormModel $model */
         $model    = $this->getModel('form.form');
@@ -85,6 +84,18 @@ class SubmissionController extends FormController
         $template = null;
         $router   = $this->get('router');
 
+        $submission      = '';
+        if ($objectId) {
+            /** @var Submission $submission */
+            $submission = $submissionModel->getEntity($objectId);
+            if (!$formTabHelper->canEdit($submission->getForm())) {
+                return $this->accessDenied();
+            }
+        }else{
+            if (!$formTabHelper->canCreate($form)) {
+                return $this->accessDenied();
+            }
+        }
 
         if ($form === null) {
             return $this->postActionRedirect(
@@ -178,9 +189,6 @@ class SubmissionController extends FormController
         }
 
         if ($closeModal) {
-            /** @var FormTabHelper $formTabHelper */
-            $formTabHelper = $this->get('mautic.extendee.form.tab.helper');
-            $formTabHelper->setResultCache('');
 
             if (!$isContactPage) {
                 return $this->postActionRedirect(
@@ -221,20 +229,20 @@ class SubmissionController extends FormController
     {
         $flashes = [];
 
+        /** @var FormTabHelper $formTabHelper */
+        $formTabHelper = $this->get('mautic.extendee.form.tab.helper');
+        $formTabHelper->setResultCache('');
+
         if ($this->request->getMethod() == 'POST') {
             $model = $this->getModel('form.submission');
 
             // Find the result
+            /** @var Submission $entity */
             $entity = $model->getEntity($objectId);
 
             if ($entity === null) {
                 return $this->accessDenied();
-            } elseif (!$this->get('mautic.security')->hasEntityAccess(
-                'form:forms:editown',
-                'form:forms:editother',
-                $entity->getCreatedBy()
-            )
-            ) {
+            } elseif (!$formTabHelper->canDelete($entity->getForm())) {
                 return $this->accessDenied();
             } else {
                 $id        = $entity->getId();
@@ -251,8 +259,6 @@ class SubmissionController extends FormController
                 ];
             }
         } //else don't do anything
-        $formTabHelper = $this->get('mautic.extendee.form.tab.helper');
-        $formTabHelper->setResultCache('');
 
         return $this->delegateView(
             [

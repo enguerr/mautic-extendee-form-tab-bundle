@@ -4,17 +4,14 @@ $item['name'] = $view['translator']->trans(
     ['%id%' => $item['id']]
 );
 $formId       = $form->getId();
-if (isset($new) && $new) {
-    echo '</tr>';
-}
+
 if (!isset($skip)) {
     ?>
     <tr id="form-tab-submission-<?php echo $item['id']; ?>">
     <?php
 }
-if ($canDelete):
-
-    $customButtons = [];
+$customButtons = [];
+if ($canEdit) {
     $customButtons[] =
         [
             'attr'      => [
@@ -34,7 +31,8 @@ if ($canDelete):
             'target'    => '#form-container',
             'priority'  => 1,
         ];
-
+}
+if ($canDelete) {
     $customButtons[] =
         [
             'confirm' => [
@@ -49,27 +47,29 @@ if ($canDelete):
                 'btnClass'      => false,
             ],
         ];
-
-
-    ?>
+}
+if ($canDelete || $canEdit) {
+?>
     <td>
         <?php
-        echo $view->render(
-            'MauticCoreBundle:Helper:list_actions.html.php',
-            [
-                'item'          => $item,
-                'route'         => 'mautic_form_results_action',
-                'langVar'       => 'form.results',
-                'query'         => [
-                    'formId'       => $formId,
-                    'objectAction' => 'delete',
-                ],
-                'customButtons' => isset($customButtons) ? $customButtons : [],
-            ]
-        );
+            echo $view->render(
+                'MauticCoreBundle:Helper:list_actions.html.php',
+                [
+                    'item'          => $item,
+                    'route'         => 'mautic_form_results_action',
+                    'langVar'       => 'form.results',
+                    'query'         => [
+                        'formId'       => $formId,
+                        'objectAction' => 'delete',
+                    ],
+                    'customButtons' => isset($customButtons) ? $customButtons : [],
+                ]
+            );
         ?>
     </td>
-<?php endif; ?>
+    <?php
+}
+    ?>
     <td>
         <?php echo $view['date']->toFull($item['dateSubmitted']); ?>
     </td>
