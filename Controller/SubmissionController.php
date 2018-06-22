@@ -72,8 +72,6 @@ class SubmissionController extends FormController
         $formId        = (empty($formId)) ? InputHelper::int($this->request->get('formId')) : $formId;
         $isContactPage = $contactId = InputHelper::int($this->request->get('contactId'));
 
-
-
         /** @var SubmissionModel $submissionModel */
         $submissionModel = $this->getModel('form.submission');
         $objectId        = (empty($objectId)) ? InputHelper::int($this->request->get('objectId')) : $objectId;
@@ -114,6 +112,7 @@ class SubmissionController extends FormController
         }
 
         $html = $model->getContent($form, false, false);
+        $model->populateValuesWithGetParameters($form, $html);
 
         $action = $router->generate(
             'mautic_formtabsubmission_edit',

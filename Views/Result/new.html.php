@@ -13,7 +13,7 @@
                     ),
                     'href'        => $view['router']->path(
                         'mautic_formtabsubmission_edit',
-                        ['formId' => $form->getId(), 'contactId' => $lead['id']]
+                        ['formId' => $form->getId(), 'contactId' => $lead['id'], 'email'=>$lead['email']]
                     ),
                 ],
                 'btnText'   => $view['translator']->trans('mautic.core.form.new'),
