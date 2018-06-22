@@ -170,9 +170,6 @@ class FormTabHelper
                 'withTotalCount' => true,
             ]
         );
-        if (empty($submissionEntities['count'])) {
-            return [];
-        }
 
         return [
             'results' => $submissionEntities,
@@ -215,7 +212,7 @@ class FormTabHelper
         }
 
         $keys = $formTab->getKeys();
-        if (empty($keys['forms'])) {
+        if (empty($keys['forms']) && empty($keys['forms_forced'])) {
             return [];
         }
 
@@ -243,12 +240,14 @@ class FormTabHelper
         foreach ($formEntities as $key => $entity) {
             /** @var Form $form */
             $form = $entity[0];
-            if (!in_array($form->getId(), $keys['forms'])) {
+
+            if (!in_array($form->getId(), array_merge($keys['forms'], $keys['forms_forced']))) {
                 continue;
             }
 
-            $submissions = $this->getFormWithResult($form, $leadId);;
-            if (empty($submissions)) {
+            $submissions = $this->getFormWithResult($form, $leadId);
+
+            if (empty($submissions['results']['count']) && !in_array($form->getId(), $keys['forms_forced'])) {
                 continue;
             }
 

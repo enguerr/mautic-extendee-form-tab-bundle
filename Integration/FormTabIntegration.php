@@ -49,6 +49,19 @@ class FormTabIntegration extends AbstractIntegration
                     ],
                 ]
             );
+
+            $builder->add(
+                'forms_forced',
+                FormListType::class,
+                [
+                    'label'      => 'mautic.extendee.form.tab.forms.forced',
+                    'label_attr' => ['class' => 'control-label'],
+                    'required'   => false,
+                    'attr'       => [
+                        'class'   => 'form-control',
+                    ],
+                ]
+            );
         }
     }
 }

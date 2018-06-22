@@ -11,31 +11,18 @@
 $formId = $form->getId();
 ?>
 <div id="form-results-<?php echo $formId ?>">
-    <p>
-        <?php
-        $customButtons = [];
-        if ($canCreate) {
-            $customButtons[] =
-                [
-                    'attr'      => [
-                        'data-toggle' => 'ajaxmodal',
-                        'data-target' => '#MauticSharedModal',
-                        'data-header' => $view['translator']->trans(
-                            'mautic.extendee.form.tab.add',
-                            ['%contactEmail%' => $lead['email']]
-                        ),
-                        'href'        => $view['router']->path(
-                            'mautic_formtabsubmission_edit',
-                            ['formId' => $form->getId(), 'contactId' => $lead['id']]
-                        ),
-                    ],
-                    'btnText'   => $view['translator']->trans('mautic.core.form.new'),
-                    'iconClass' => 'fa fa-plus',
-                ];
-        }
-        echo $view->render('MauticCoreBundle:Helper:page_actions.html.php', ['customButtons' => $customButtons]);
-        ?>
-    </p>
+
+    <?php
+    echo $view->render(
+        'MauticExtendeeFormTabBundle:Result:new.html.php',
+        [
+            'form' => $form,
+            'lead' => $lead,
+            'canCreate'=>$canCreate
+        ]
+    );
+    ?>
+    <?php if (count($items)): ?>
     <div class="table-responsive table-responsive-force">
         <table class="table table-hover table-striped table-bordered formresult-list">
             <thead>
@@ -76,7 +63,6 @@ $formId = $form->getId();
             </tr>
             </thead>
             <tbody>
-            <?php if (count($items)): ?>
                 <?php foreach ($items as $item):
                     echo $view->render(
                         'MauticExtendeeFormTabBundle:Result:item.html.php',
@@ -91,8 +77,8 @@ $formId = $form->getId();
                     );
                     ?>
                 <?php endforeach; ?>
-            <?php endif; ?>
             </tbody>
         </table>
     </div>
+    <?php endif; ?>
 </div>

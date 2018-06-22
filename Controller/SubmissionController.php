@@ -113,7 +113,7 @@ class SubmissionController extends FormController
             );
         }
 
-        $html = $model->getContent($form, true, false);
+        $html = $model->getContent($form, false, false);
 
         $action = $router->generate(
             'mautic_formtabsubmission_edit',
