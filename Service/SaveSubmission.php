@@ -195,7 +195,7 @@ class SaveSubmission
                 continue;
             } elseif ($f->isFileType()) {
                 try {
-                    $file  = $this->uploadFieldValidator->processFileValidation($f, $request);
+                    $file  = $this->fieldValidator->processFileValidation($f, $request);
                     $value = $file->getClientOriginalName();
                     $filesToUpload->addFile($file, $f);
                 } catch (NoFileGivenException $e) { //No error here, we just move to another validation, eg. if a field is required
