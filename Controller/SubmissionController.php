@@ -82,7 +82,7 @@ class SubmissionController extends FormController
             if (!$formTabHelper->canCreate($form)) {
                 return $this->accessDenied();
             }
-        }
+        };
 
         if ($form === null) {
             return $this->postActionRedirect(
@@ -293,6 +293,8 @@ class SubmissionController extends FormController
             case 'email':
             case 'hidden':
             case 'number':
+            case 'date':
+            case 'datetime':
             case 'url':
                 if (preg_match(
                     '/<input(.*?)id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)value="(.*?)"(.*?)\/>/i',
