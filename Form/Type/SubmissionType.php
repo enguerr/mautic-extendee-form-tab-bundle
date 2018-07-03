@@ -25,6 +25,17 @@ class SubmissionType extends AbstractType
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
+
+        $data = $options['data'];
+        $builder->add(
+            'execute',
+            'yesno_button_group',
+            [
+                'label' => 'mautic.extendee.form.tab.execute',
+                'data'  => (isset($data['execute'])) ? (bool) $data['execute'] : false,
+            ]
+        );
+
         $builder->add(
             'buttons',
             'form_buttons',

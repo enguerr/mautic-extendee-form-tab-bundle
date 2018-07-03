@@ -27,5 +27,10 @@ if (!empty($error)) {
 
 <?php echo $view['form']->start($form); ?>
 <?php echo $content; ?>
+<?php
+if($new) {
+    echo $view['form']->row($form['execute']);
+}
+?>
 <?php echo $view['form']->row($form['buttons']); ?>
 <?php echo $view['form']->end($form); ?>

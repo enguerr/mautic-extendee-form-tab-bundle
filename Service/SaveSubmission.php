@@ -14,8 +14,10 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Service;
 use Doctrine\ORM\EntityManager;
 use Mautic\CampaignBundle\Model\CampaignModel;
 use Mautic\CoreBundle\Exception\FileUploadException;
+use Mautic\CoreBundle\Factory\MauticFactory;
 use Mautic\CoreBundle\Helper\InputHelper;
 use Mautic\CoreBundle\Helper\IpLookupHelper;
+use Mautic\FormBundle\Event\SubmissionEvent;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Crate\UploadFileCrate;
 use Mautic\FormBundle\Entity\Field;
@@ -29,6 +31,7 @@ use Mautic\FormBundle\Helper\FormUploader;
 use Mautic\FormBundle\Model\SubmissionModel;
 use Mautic\FormBundle\Validator\UploadFieldValidator;
 use Mautic\LeadBundle\Entity\Lead;
+use Mautic\LeadBundle\Model\LeadModel;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -91,6 +94,16 @@ class SaveSubmission
     private $entity;
 
     /**
+     * @var LeadModel
+     */
+    private $leadModel;
+
+    /**
+     * @var MauticFactory
+     */
+    private $factory;
+
+    /**
      * SaveSubmission constructor.
      *
      * @param FormModel                                $formModel
@@ -103,8 +116,10 @@ class SaveSubmission
      * @param SubmissionModel                          $submissionModel
      * @param IpLookupHelper                           $ipLookupHelper
      * @param EntityManager                            $entity
+     * @param LeadModel                                $leadModel
+     * @param MauticFactory                            $factory
      */
-    public function __construct(FormModel $formModel, FormFieldHelper $fieldHelper,UploadFieldValidator $fieldValidator, FormUploader $formUploader, CampaignModel $campaignModel, EventDispatcherInterface $dispatcher, TranslatorInterface $translator, SubmissionModel $submissionModel, IpLookupHelper $ipLookupHelper, EntityManager $entity)
+    public function __construct(FormModel $formModel, FormFieldHelper $fieldHelper,UploadFieldValidator $fieldValidator, FormUploader $formUploader, CampaignModel $campaignModel, EventDispatcherInterface $dispatcher, TranslatorInterface $translator, SubmissionModel $submissionModel, IpLookupHelper $ipLookupHelper, EntityManager $entity, LeadModel $leadModel, MauticFactory $factory)
     {
 
         $this->formModel = $formModel;
@@ -117,6 +132,8 @@ class SaveSubmission
         $this->submissionModel = $submissionModel;
         $this->ipLookupHelper = $ipLookupHelper;
         $this->entity = $entity;
+        $this->leadModel = $leadModel;
+        $this->factory = $factory;
     }
 
     /**
@@ -299,17 +316,6 @@ class SaveSubmission
 
         // Set the results
         $submission->setResults($results);
-        $lead = null;
-        // Remove validation errors if the field is not visible
-        if ($lead && $form->usesProgressiveProfiling()) {
-            $leadSubmissions = $this->formModel->getLeadSubmissions($form, $lead->getId());
-
-            foreach ($fields as $field) {
-                if (isset($validationErrors[$field->getAlias()]) && !$field->showForContact($leadSubmissions, $lead, $form)) {
-                    unset($validationErrors[$field->getAlias()]);
-                }
-            }
-        }
 
         //return errors if there any
         if (!empty($validationErrors)) {
@@ -331,21 +337,119 @@ class SaveSubmission
 
             return ['errors' => $validationErrors];
         }
-
         // Save the submission
         $this->saveUpdateEntity($submission);
+        if ($request->get('form_tab_submission')['execute']) {
+            $this->leadModel->setFieldValues($lead, $leadFieldMatches);
+            $this->leadModel->saveEntity($lead);
+            // Create an event to be dispatched through the processes
+            $submissionEvent = new SubmissionEvent($submission, $post, $server, $request);
 
-       /* if (!$form->isStandalone()) {
-            // Find and add the lead to the associated campaigns
-            $campaigns = $this->campaignModel->getCampaignsByForm($form);
-            if (!empty($campaigns)) {
-                foreach ($campaigns as $campaign) {
-                    $this->campaignModel->addLead($campaign, $lead);
+            // Update the event
+            $submissionEvent->setFields($fieldArray)
+                ->setTokens($tokens)
+                ->setResults($results)
+                ->setContactFieldMatches($leadFieldMatches);
+
+            // Now handle post submission actions
+            try {
+                $this->executeFormActions($submissionEvent);
+            } catch (ValidationException $exception) {
+            }
+
+            if (!$form->isStandalone()) {
+                // Find and add the lead to the associated campaigns
+                $campaigns = $this->campaignModel->getCampaignsByForm($form);
+                if (!empty($campaigns)) {
+                    foreach ($campaigns as $campaign) {
+                        $this->campaignModel->addLead($campaign, $lead);
+                    }
                 }
             }
-        }*/
+        }
 
         return $submission;
+    }
+
+    /**
+     * Execute a form submit action.
+     *
+     * @param SubmissionEvent $event
+     *
+     * @throws ValidationException
+     */
+    protected function executeFormActions(SubmissionEvent $event)
+    {
+        $actions          = $event->getSubmission()->getForm()->getActions();
+        $availableActions = $this->formModel->getCustomComponents()['actions'];
+
+        // @deprecated support for callback - to be removed in 3.0
+        $args = [
+            'post'       => $event->getPost(),
+            'server'     => $event->getServer(),
+            'factory'    => $this->factory, // WHAT??
+            'submission' => $event->getSubmission(),
+            'fields'     => $event->getFields(),
+            'form'       => $event->getSubmission()->getForm(),
+            'tokens'     => $event->getTokens(),
+            'feedback'   => [],
+            'lead'       => $event->getSubmission()->getLead(),
+        ];
+
+        foreach ($actions as $action) {
+            $key = $action->getType();
+            if (!isset($availableActions[$key])) {
+                continue;
+            }
+
+            $settings = $availableActions[$key];
+            if (isset($settings['eventName'])) {
+                $event->setActionConfig($key, $action->getProperties());
+                $this->dispatcher->dispatch($settings['eventName'], $event);
+
+                // @deprecated support for callback - to be removed in 3.0
+                $args['lead']     = $event->getSubmission()->getLead();
+                $args['feedback'] = $event->getActionFeedback();
+            } elseif (isset($settings['callback'])) {
+                // @deprecated support for callback - to be removed in 3.0; be sure to remove callback support from FormBuilderEvent as well
+
+                $args['action'] = $action;
+                $args['config'] = $action->getProperties();
+
+                // Set the lead each time in case an action updates it
+                $args['lead'] = $this->leadModel->getCurrentLead();
+
+                $callback = $settings['callback'];
+                if (is_callable($callback)) {
+                    if (is_array($callback)) {
+                        $reflection = new \ReflectionMethod($callback[0], $callback[1]);
+                    } elseif (strpos($callback, '::') !== false) {
+                        $parts      = explode('::', $callback);
+                        $reflection = new \ReflectionMethod($parts[0], $parts[1]);
+                    } else {
+                        $reflection = new \ReflectionMethod(null, $callback);
+                    }
+
+                    $pass = [];
+                    foreach ($reflection->getParameters() as $param) {
+                        if (isset($args[$param->getName()])) {
+                            $pass[] = $args[$param->getName()];
+                        } else {
+                            $pass[] = null;
+                        }
+                    }
+                    $returned               = $reflection->invokeArgs($this, $pass);
+                    $args['feedback'][$key] = $returned;
+
+                    // Set these for updated plugins to leverage
+                    if (isset($returned['callback'])) {
+                        $event->setPostSubmitCallback($key, $returned);
+                    }
+
+                    $event->setActionFeedback($key, $returned);
+                }
+            }
+        }
     }
 
     /**

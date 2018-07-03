@@ -119,6 +119,7 @@ class SubmissionController extends FormController
                 'action' => $action,
             ]
         );
+
         $flashes    = [];
         $closeModal = false;
         $new        = false;
@@ -199,6 +200,7 @@ class SubmissionController extends FormController
             [
                 'viewParameters'  => [
                     'content' => $html,
+                    'new' => $new,
                     'name'    => $form->getName(),
                     'form'    => $formView->createView(),
                     'error'=>$error

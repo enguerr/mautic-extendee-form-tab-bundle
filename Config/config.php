@@ -51,7 +51,9 @@ return [
                     'translator',
                     'mautic.form.model.submission',
                     'mautic.helper.ip_lookup',
-                    'doctrine.orm.entity_manager'
+                    'doctrine.orm.entity_manager',
+                    'mautic.lead.model.lead',
+                    'mautic.factory'
                 ],
             ],
             'mautic.extendee.form.tab.helper' => [
