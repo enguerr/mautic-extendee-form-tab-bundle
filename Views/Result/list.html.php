@@ -5,8 +5,8 @@
 <ul class="nav nav-tabs pr-md pl-md mt-10">
     <?php foreach ($leadForms as $key => $leadForm): ?>
         <li<?php if ($key == 0): ?> class="active"<?php endif; ?>>
-            <a href="#form-<?php echo $leadForm['entity']->getAlias() ?>" role="tab" data-toggle="tab">
-                <span class="label label-primary mr-sm" id="form-label-<?php echo $leadForm['entity']->getAlias() ?>">
+            <a href="#form-<?php echo $leadForm['entity']->getAlias() ?>-<?php echo $leadForm['entity']->getId() ?>" role="tab" data-toggle="tab">
+                <span class="label label-primary mr-sm" id="form-label-<?php echo $leadForm['entity']->getAlias() ?>-<?php echo $leadForm['entity']->getId() ?>">
                     <?php echo $leadForm['results']['count']; ?>
                 </span>
                 <?php echo $leadForm['entity']->getName(); ?>
@@ -17,7 +17,7 @@
 <div class="tab-content pa-md form-tab-results">
     <?php foreach ($leadForms as $key=>$leadForm):
         ?>
-        <div class="tab-pane fade bdr-w-0  <?php if ($key == 0): ?> active in<?php endif; ?>" id="form-<?php echo $leadForm['entity']->getAlias()?>">
+        <div class="tab-pane fade bdr-w-0  <?php if ($key == 0): ?> active in<?php endif; ?>" id="form-<?php echo $leadForm['entity']->getAlias()?>-<?php echo $leadForm['entity']->getId()?>">
             <?php echo $leadForm['content']; ?>
         </div>
     <?php endforeach; ?>
