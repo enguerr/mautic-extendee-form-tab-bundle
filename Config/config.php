@@ -31,6 +31,12 @@ return [
                 'arguments' => [
                 ],
             ],
+            'mautic.extendee.form.tab.token.subscriber' => [
+                'class'     => \MauticPlugin\MauticExtendeeFormTabBundle\EventListener\TokensSubscriber::class,
+                'arguments' => [
+                    'mautic.form.model.field'
+                ],
+            ],
         ],
         'forms' => [
             'mautic.form.tab.type.submission' => [
