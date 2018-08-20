@@ -13,6 +13,7 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Controller;
 
 use Mautic\CoreBundle\Controller\FormController;
 use Mautic\CoreBundle\Helper\InputHelper;
+use Mautic\FormBundle\Entity\Field;
 use Mautic\FormBundle\Entity\Submission;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
@@ -286,7 +287,7 @@ class SubmissionController extends FormController
      * @param $formName
      * @param $formHtml
      */
-    public function populateField($field, $value, $formName, &$formHtml)
+    public function populateField(Field $field, $value, $formName, &$formHtml)
     {
         $alias = $field->getAlias();
 

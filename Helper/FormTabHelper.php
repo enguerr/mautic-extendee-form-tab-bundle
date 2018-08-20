@@ -146,7 +146,15 @@ class FormTabHelper
         );
     }
 
-    public function getFormWithResult(Form $form, $contactId)
+    /**
+     * @param Form $form
+     * @param      $contactId
+     *
+     * @param bool $withoutContent
+     *
+     * @return array
+     */
+    public function getFormWithResult(Form $form, $contactId, $withoutContent = false)
     {
         $viewOnlyFields = $this->formModel->getCustomComponents()['viewOnlyFields'];
 
@@ -170,10 +178,10 @@ class FormTabHelper
                 'withTotalCount' => true,
             ]
         );
-
-        return [
-            'results' => $submissionEntities,
-            'content' => $this->templatingHelper->getTemplating()->render(
+        $return             = [];
+        $return['results']  = $submissionEntities;
+        if ($withoutContent !== true) {
+            $return['content'] = $this->templatingHelper->getTemplating()->render(
                 'MauticExtendeeFormTabBundle:Result:list-condensed.html.php',
                 [
                     'lead'           => $this->leadModel->getLead($contactId),
@@ -185,9 +193,9 @@ class FormTabHelper
                     'canDelete'      => $this->canDelete($form),
                     'viewOnlyFields' => $viewOnlyFields,
                 ]
-            ),
-        ];
-
+            );
+        }
+        return $return;
     }
 
     /**

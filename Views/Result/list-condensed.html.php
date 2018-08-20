@@ -67,12 +67,12 @@ $formId = $form->getId();
                     echo $view->render(
                         'MauticExtendeeFormTabBundle:Result:item.html.php',
                         [
-                            'item'        => $item,
-                            'form'        => $form,
-                            'canDelete'   => $canDelete,
-                            'lead'        => $lead,
-                            'canEdit'=>$canEdit,
-                            'canDelete'=>$canDelete,
+                            'item'      => $item,
+                            'form'      => $form,
+                            'canDelete' => $canDelete,
+                            'lead'      => $lead,
+                            'canEdit'   => $canEdit,
+                            'canDelete' => $canDelete,
                         ]
                     );
                     ?>

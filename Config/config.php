@@ -37,6 +37,21 @@ return [
                     'mautic.form.model.field'
                 ],
             ],
+            'mautic.extendee.form.tab.camapign.form.results.subscriber' => [
+                'class'     => \MauticPlugin\MauticExtendeeFormTabBundle\EventListener\CampaginFormResultsSubscriber::class,
+                'arguments' => [
+                    'mautic.lead.model.lead',
+                    'mautic.email.model.email',
+                    'mautic.campaign.model.event',
+                    'mautic.channel.model.queue',
+                    'mautic.email.model.send_email_to_user',
+                    'translator',
+                    'mautic.form.model.form',
+                    'mautic.form.model.field',
+                    'mautic.form.model.submission',
+                    'mautic.extendee.form.tab.helper'
+                ],
+            ],
         ],
         'forms' => [
             'mautic.form.tab.type.submission' => [
