@@ -101,8 +101,7 @@ class SubmissionController extends FormController
             );
         }
 
-        $html = $model->getContent($form, false, false);
-        $model->populateValuesWithGetParameters($form, $html);
+        $html = $formTabHelper->getFormContent($form, true);
 
         $action = $router->generate(
             'mautic_formtabsubmission_edit',
@@ -169,17 +168,13 @@ class SubmissionController extends FormController
 
 
         // hide fomr start/end and button, because we wanna use controller view
-        //$html     = preg_replace('/action="([^"]+)/', 'action="'.$action, $html, 1);
-        $html = preg_replace('/<form(.*)>/', '', $html, 1);
-        $html = preg_replace('/<button type="submit"(.*)<\/button>/', '', $html, 1);
-        $html = str_replace('</form>', '', $html);
+
         // prepopulate
         if (!empty($submission)) {
             $this->populateValuesWithLead($submission, $html);
         }
 
         if ($closeModal) {
-
             if (!$isContactPage) {
                 return $this->postActionRedirect(
                     $this->getPostActionVars($formId)

@@ -339,7 +339,7 @@ class SaveSubmission
         }
         // Save the submission
         $this->saveUpdateEntity($submission);
-        if ($request->get('form_tab_submission')['execute']) {
+        if ($request && $request->get('form_tab_submission')['execute']) {
             $this->leadModel->setFieldValues($lead, $leadFieldMatches);
             $this->leadModel->saveEntity($lead);
             // Create an event to be dispatched through the processes

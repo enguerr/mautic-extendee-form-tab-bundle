@@ -97,6 +97,48 @@ class FormTabHelper
     }
 
     /**
+     * @param null $formId
+     * @param bool $populate
+     *
+     * @param null $replaceAttrName
+     *
+     * @return string
+     */
+    public function getFormContentFromId($formId, $populate = false, $replaceAttrName = null)
+    {
+        return $this->getFormContent($this->formModel->getEntity($formId), $populate, $replaceAttrName);
+
+    }
+
+    /**
+     * @param Form $form
+     * @param bool $populate
+     *
+     * @param null $replaceAttrName
+     *
+     * @return mixed|string
+     */
+    public function getFormContent(Form $form, $populate = false, $replaceAttrName = null)
+    {
+        $html = $this->formModel->getContent($form, false, false);
+
+        if ($replaceAttrName) {
+            $html = str_replace('name="mauticform', $replaceAttrName, $html);
+
+        }
+
+        if (true === $populate) {
+            $this->formModel->populateValuesWithGetParameters($form, $html);
+        }
+
+        $html = preg_replace('/<form(.*)>/', '', $html, 1);
+        $html = preg_replace('/<button type="submit"(.*)<\/button>/', '', $html, 1);
+        $html = str_replace('</form>', '', $html);
+
+        return $html;
+    }
+
+    /**
      * @param array $leadForms
      */
     public function getTabHeaderWithResult(array $leadForms)
@@ -338,6 +380,4 @@ class FormTabHelper
     {
         $this->resultCache = $resultCache;
     }
-
-
 }

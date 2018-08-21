@@ -27,6 +27,7 @@ class SubmissionType extends AbstractType
     {
 
         $data = $options['data'];
+
         $builder->add(
             'execute',
             'yesno_button_group',
@@ -43,6 +44,9 @@ class SubmissionType extends AbstractType
                 'apply_text' => false,
             ]
         );
+
+        $builder
+            ->setAttribute('custom', 'customtext');
 
         if (!empty($options['action'])) {
             $builder->setAction($options['action']);

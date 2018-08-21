@@ -27,13 +27,20 @@ use Mautic\EmailBundle\Exception\EmailCouldNotBeSentException;
 use Mautic\EmailBundle\Helper\UrlMatcher;
 use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\EmailBundle\Model\SendEmailToUser;
+use Mautic\FormBundle\Entity\Submission;
 use Mautic\FormBundle\Model\FieldModel;
 use Mautic\FormBundle\Model\SubmissionModel;
 use Mautic\LeadBundle\Entity\Lead;
 use Mautic\LeadBundle\Model\LeadModel;
 use Mautic\PageBundle\Entity\Hit;
+use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\ModifyFormResultType;
+use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\SubmissionType;
+use MauticPlugin\MauticExtendeeFormTabBundle\FormTabEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
+use MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission;
+use MauticPlugin\MauticRecombeeBundle\RecombeeEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Translation\TranslatorInterface;
 
 
@@ -93,6 +100,16 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     private $formTabHelper;
 
     /**
+     * @var SaveSubmission
+     */
+    private $saveSubmission;
+
+    /**
+     * @var RequestStack
+     */
+    private $requestStack;
+
+    /**
      * @param LeadModel           $leadModel
      * @param EmailModel          $emailModel
      * @param EventModel          $eventModel
@@ -103,6 +120,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
      * @param FieldModel          $fieldModel
      * @param SubmissionModel     $submissionModel
      * @param FormTabHelper       $formTabHelper
+     * @param SaveSubmission      $saveSubmission
+     * @param RequestStack        $requestStack
      */
     public function __construct(
         LeadModel $leadModel,
@@ -114,7 +133,9 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         FormModel $formModel,
         FieldModel $fieldModel,
         SubmissionModel $submissionModel,
-        FormTabHelper $formTabHelper
+        FormTabHelper $formTabHelper,
+        SaveSubmission $saveSubmission,
+        RequestStack $requestStack
     ) {
         $this->leadModel          = $leadModel;
         $this->emailModel         = $emailModel;
@@ -126,6 +147,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $this->fieldModel         = $fieldModel;
         $this->submissionModel    = $submissionModel;
         $this->formTabHelper      = $formTabHelper;
+        $this->saveSubmission = $saveSubmission;
+        $this->requestStack = $requestStack;
     }
 
     /**
@@ -135,8 +158,9 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     {
         return [
             CampaignEvents::CAMPAIGN_ON_BUILD     => ['onCampaignBuild', 0],
-            EmailEvents::ON_CAMPAIGN_BATCH_ACTION => [
-                ['onCampaignTriggerActionSendEmailToContact', 0],
+            FormTabEvents::ON_CAMPAIGN_BATCH_ACTION => [
+                ['onCampaignTriggerActionSendEmailToContact', 1],
+                ['onCampaignTriggerActionModifyFormResults', 0],
             ],
         ];
     }
@@ -146,13 +170,12 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
      */
     public function onCampaignBuild(CampaignBuilderEvent $event)
     {
-
         $event->addAction(
             'email.send.form.results',
             [
                 'label'                  => 'mautic.extendee.form.tab.campaign.event.send',
                 'description'            => 'mautic.extendee.form.tab.campaign.event.send.desc',
-                'batchEventName'         => EmailEvents::ON_CAMPAIGN_BATCH_ACTION,
+                'batchEventName'         => FormTabEvents::ON_CAMPAIGN_BATCH_ACTION,
                 'formType'               => 'emailsend_list',
                 'formTypeOptions'        => ['update_select' => 'campaignevent_properties_email'],
                 'formTheme'              => 'MauticEmailBundle:FormTheme\EmailSendList',
@@ -170,8 +193,91 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 ],
             ]
         );
+
+        $event->addAction(
+            'modify.form.result',
+            [
+                'label'                  => 'mautic.extendee.form.tab.campaign.event.modify.results',
+                'description'            => 'mautic.extendee.form.tab.campaign.event.modify.results.desc',
+                'batchEventName'         => FormTabEvents::ON_CAMPAIGN_BATCH_ACTION,
+                'formType'               => ModifyFormResultType::class,
+                'formTheme'              => 'MauticExtendeeFormTabBundle:FormTheme\ModifyFormResultType',
+            ]
+        );
     }
 
+    /**
+     * Triggers the action which sends email to contacts.
+     *
+     * @param PendingEvent $event
+     *
+     * @throws \Doctrine\ORM\ORMException
+     */
+    public function onCampaignTriggerActionModifyFormResults(PendingEvent $event)
+    {
+        if (!$event->checkContext('modify.form.result')) {
+            return;
+        }
+
+        $config = $event->getEvent()->getProperties();
+        $form = $this->formModel->getRepository()->findOneById($config['form']);
+
+        if (!$form || !$form->getId()) {
+            $event->failAll('Form not found.');
+
+            return;
+        }
+
+        $event->setChannel('form', $config['form']);
+
+        // Determine if this email is transactional/marketing
+        $pending         = $event->getPending();
+        $contacts        = $event->getContacts();
+        $contactIds      = $event->getContactIds();
+        $server =   $_SERVER;
+        /**
+         * @var int
+         * @var Lead $contact
+         */
+        foreach ($contacts as $logId => $contact) {
+
+            $formResults = $this->formTabHelper->getFormWithResult($form, $contact->getId(), true);
+            if (empty($formResults['results']['count'])) {
+                unset($contactIds[$contact->getId()]);;
+                continue;
+            }
+            $errors = [];
+            foreach ($formResults['results']['results'] as $results) {
+                $fields = $results['results'];
+                $post = [];
+                $post['submissionId'] = $results['id'];
+                foreach ($fields as $field) {
+                    if (!empty(($config['content'][$field['alias']]))) {
+                        $post[$field['alias']] = $config['content'][$field['alias']];
+                    } else {
+                        $post[$field['alias']] = $field['value'];
+                    }
+                }
+                $result = $this->saveSubmission->saveSubmission(
+                    $post,
+                    $server,
+                    $form,
+                    null,
+                    true,
+                    $contact
+
+                );
+                if (!$result instanceof Submission && !empty($result['errors'])) {
+                    $errors[] = $result['errors'];
+                }
+            }
+            if (!empty($errors)) {
+                $event->fail($pending->get($logId), implode(', ', $errors));
+            } else {
+                $event->pass($pending->get($logId));
+            }
+        }
+    }
 
     /**
      * Triggers the action which sends email to contacts.
@@ -196,7 +302,6 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
 
             return;
         }
-
 
         $eventParent = $event->getEvent()->getParent();
         if (empty($eventParent) || $eventParent->getType() !== 'form.field_value') {
@@ -225,9 +330,6 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $pending         = $event->getPending();
         $contacts        = $event->getContacts();
         $contactIds      = $event->getContactIds();
-        $credentialArray = [];
-        $resultsArray    = [];
-
         /**
          * @var int
          * @var Lead $contact
@@ -240,7 +342,6 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
             if ($contact->getOwner()) {
                 $leadCredentials['owner_id'] = $contact->getOwner()->getId();
             }
-
             if (empty($leadCredentials['email'])) {
                 // Pass with a note to the UI because no use retrying
                 $event->passWithError(
@@ -282,6 +383,12 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         }
     }
 
+    /**
+     * @param array $content
+     * @param array $results
+     *
+     * @return array
+     */
     public function findTokens($content, $results)
     {
 

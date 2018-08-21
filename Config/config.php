@@ -49,7 +49,9 @@ return [
                     'mautic.form.model.form',
                     'mautic.form.model.field',
                     'mautic.form.model.submission',
-                    'mautic.extendee.form.tab.helper'
+                    'mautic.extendee.form.tab.helper',
+                    'mautic.extendee.form.tab.service.save_submission',
+                    'request_stack'
                 ],
             ],
         ],
@@ -57,6 +59,14 @@ return [
             'mautic.form.tab.type.submission' => [
                 'class' => MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\SubmissionType::class,
                 'alias' => 'form_tab_submission',
+            ],
+            'mautic.form.tab.type.modify.result' => [
+                'class' => MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\ModifyFormResultType::class,
+                'arguments' => [
+                    'mautic.extendee.form.tab.helper',
+                    'request_stack'
+                ],
+                'alias' => 'form_tab_modify_result',
             ],
         ],
         'other' => [
