@@ -147,8 +147,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $this->fieldModel         = $fieldModel;
         $this->submissionModel    = $submissionModel;
         $this->formTabHelper      = $formTabHelper;
-        $this->saveSubmission = $saveSubmission;
-        $this->requestStack = $requestStack;
+        $this->saveSubmission     = $saveSubmission;
+        $this->requestStack       = $requestStack;
     }
 
     /**
@@ -157,7 +157,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     public static function getSubscribedEvents()
     {
         return [
-            CampaignEvents::CAMPAIGN_ON_BUILD     => ['onCampaignBuild', 0],
+            CampaignEvents::CAMPAIGN_ON_BUILD       => ['onCampaignBuild', 0],
             FormTabEvents::ON_CAMPAIGN_BATCH_ACTION => [
                 ['onCampaignTriggerActionSendEmailToContact', 1],
                 ['onCampaignTriggerActionModifyFormResults', 0],
@@ -197,11 +197,11 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $event->addAction(
             'modify.form.result',
             [
-                'label'                  => 'mautic.extendee.form.tab.campaign.event.modify.results',
-                'description'            => 'mautic.extendee.form.tab.campaign.event.modify.results.desc',
-                'batchEventName'         => FormTabEvents::ON_CAMPAIGN_BATCH_ACTION,
-                'formType'               => ModifyFormResultType::class,
-                'formTheme'              => 'MauticExtendeeFormTabBundle:FormTheme\ModifyFormResultType',
+                'label'          => 'mautic.extendee.form.tab.campaign.event.modify.results',
+                'description'    => 'mautic.extendee.form.tab.campaign.event.modify.results.desc',
+                'batchEventName' => FormTabEvents::ON_CAMPAIGN_BATCH_ACTION,
+                'formType'       => ModifyFormResultType::class,
+                'formTheme'      => 'MauticExtendeeFormTabBundle:FormTheme\ModifyFormResultType',
             ]
         );
     }
@@ -220,7 +220,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         }
 
         $config = $event->getEvent()->getProperties();
-        $form = $this->formModel->getRepository()->findOneById($config['form']);
+        $form   = $this->formModel->getRepository()->findOneById($config['form']);
 
         if (!$form || !$form->getId()) {
             $event->failAll('Form not found.');
@@ -231,10 +231,10 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $event->setChannel('form', $config['form']);
 
         // Determine if this email is transactional/marketing
-        $pending         = $event->getPending();
-        $contacts        = $event->getContacts();
-        $contactIds      = $event->getContactIds();
-        $server =   $_SERVER;
+        $pending    = $event->getPending();
+        $contacts   = $event->getContacts();
+        $contactIds = $event->getContactIds();
+        $server     = $_SERVER;
         /**
          * @var int
          * @var Lead $contact
@@ -248,8 +248,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
             }
             $errors = [];
             foreach ($formResults['results']['results'] as $results) {
-                $fields = $results['results'];
-                $post = [];
+                $fields               = $results['results'];
+                $post                 = [];
                 $post['submissionId'] = $results['id'];
                 foreach ($fields as $field) {
                     if (!empty(($config['content'][$field['alias']]))) {
@@ -304,13 +304,25 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         }
 
         $eventParent = $event->getEvent()->getParent();
-        if (empty($eventParent) || $eventParent->getType() !== 'form.field_value') {
+        if (empty($eventParent) || !in_array(
+                $eventParent->getType(),
+                ['form.tab.date.condition', 'form.field_value']
+            )
+        ) {
             $event->failAll('Parent condition not found.');
 
             return;
         }
 
-        $form = $this->formModel->getRepository()->findOneById($eventParent->getProperties()['form']);
+        // If form value condition
+        if ($eventParent->getType() === 'form.field_value') {
+            $formId = $eventParent->getProperties()['form'];
+        } else {
+            // If form date value condition
+            list($formId, $fieldId) = explode('-', $eventParent->getProperties()['field']);
+        }
+
+        $form = $this->formModel->getRepository()->findOneById($formId);
 
         if (!$form || !$form->getId()) {
             $event->failAll('Parent form not found.');
@@ -327,9 +339,9 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         ];
 
         // Determine if this email is transactional/marketing
-        $pending         = $event->getPending();
-        $contacts        = $event->getContacts();
-        $contactIds      = $event->getContactIds();
+        $pending    = $event->getPending();
+        $contacts   = $event->getContacts();
+        $contactIds = $event->getContactIds();
         /**
          * @var int
          * @var Lead $contact
@@ -363,7 +375,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
 
             $reason = [];
             foreach ($formResults['results']['results'] as $results) {
-                $tokens = $this->findTokens($emailContent, $results['results']);
+                $tokens          = $this->findTokens($emailContent, $results['results']);
                 $newEmailContent = str_replace(array_keys($tokens), $tokens, $emailContent);
                 // replace all form field tokens
                 $email->setCustomHtml($newEmailContent);
@@ -411,7 +423,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
 
                     if (!empty($results[$match])) {
                         $tokenList[$token] = $results[$match]['value'];
-                    }else{
+                    } else {
                         $tokenList[$token] = '';
                     }
                 }

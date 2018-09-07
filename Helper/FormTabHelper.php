@@ -11,14 +11,17 @@
 
 namespace MauticPlugin\MauticExtendeeFormTabBundle\Helper;
 
+use Doctrine\ORM\EntityManager;
 use Joomla\Http\Http;
 use Mautic\CoreBundle\Helper\TemplatingHelper;
 use Mautic\CoreBundle\Helper\UserHelper;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
+use Mautic\FormBundle\Entity\Field;
 use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Entity\Submission;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
+use Mautic\LeadBundle\Entity\Lead;
 use Mautic\LeadBundle\Model\LeadModel;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Integration\FormTabIntegration;
@@ -67,15 +70,21 @@ class FormTabHelper
     private $leadModel;
 
     /**
+     * @var EntityManager
+     */
+    private $entityManager;
+
+    /**
      * FormTabHelper constructor.
      *
-     * @param TemplatingHelper  $templatingHelper
-     * @param FormModel         $formModel
-     * @param UserHelper        $userHelper
-     * @param CorePermissions   $security
-     * @param SubmissionModel   $submissionModel
-     * @param IntegrationHelper $integrationHelper
-     * @param LeadModel         $leadModel
+     * @param TemplatingHelper                     $templatingHelper
+     * @param FormModel                            $formModel
+     * @param UserHelper                           $userHelper
+     * @param CorePermissions                      $security
+     * @param SubmissionModel                      $submissionModel
+     * @param IntegrationHelper|IntegrationHeZlper $integrationHelper
+     * @param LeadModel                            $leadModel
+     * @param EntityManager                        $entityManager
      */
     public function __construct(
         TemplatingHelper $templatingHelper,
@@ -84,7 +93,8 @@ class FormTabHelper
         CorePermissions $security,
         SubmissionModel $submissionModel,
         IntegrationHelper $integrationHelper,
-        LeadModel $leadModel
+        LeadModel $leadModel,
+        EntityManager $entityManager
     ) {
 
         $this->formModel         = $formModel;
@@ -94,6 +104,7 @@ class FormTabHelper
         $this->submissionModel   = $submissionModel;
         $this->integrationHelper = $integrationHelper;
         $this->leadModel         = $leadModel;
+        $this->entityManager = $entityManager;
     }
 
     /**
@@ -241,6 +252,88 @@ class FormTabHelper
     }
 
     /**
+     * Get all form entities with permission
+     *
+     * @return array|\Doctrine\ORM\Tools\Pagination\Paginator
+     */
+    public function getFormsEntities()
+    {
+        $filters     = [];
+
+        $permissions = $this->security->isGranted(
+            [
+                'form:forms:viewown',
+                'form:forms:viewother',
+            ],
+            'RETURN_ARRAY'
+        );
+        if ($permissions['form:forms:viewown'] && !$permissions['form:forms:viewother']) {
+            $filters[] = ['column' => 'f.createdBy', 'expr' => 'eq', 'value' => $this->userHelper->getUser()->getId()];
+        }
+        return $this->formModel->getEntities(
+            [
+                'filter' => ['force' => $filters],
+            ]
+        );
+    }
+
+    /**
+     * Get all date fields
+     *
+     * @return array
+     */
+    public function getDateFields()
+    {
+        $forms = $this->getFormsEntities();
+        foreach ($forms as $entity) {
+            /** @var Form $form */
+            $form = $entity[0];
+            $fields =  $form->getFields();
+            /** @var Field $field */
+            foreach ($fields as $field) {
+                if (in_array($field->getType(), ['date'])) {
+                    $dateFields[$form->getId()][$field->getAlias()] = $field;
+                }
+            }
+        }
+        return $dateFields;
+    }
+
+    /**
+     * Compare a form result value with defined date value for defined lead.
+     *
+     * @param Form                   $form
+     * @param CampaignExecutionEvent $event
+     * @param string                 $value to compare with
+     *
+     * @return bool
+     */
+    public function compareDateValue($form, Lead $lead, $field, $value)
+    {
+        $formAlias = $form->getAlias();
+        $formId = $form->getId();
+
+        //use DBAL to get entity fields
+        $q = $this->entityManager->getConnection()->createQueryBuilder();
+        $q->select('s.id')
+            ->from($this->submissionModel->getRepository()->getResultsTableName($formId, $formAlias), 'r')
+            ->leftJoin('r', MAUTIC_TABLE_PREFIX.'form_submissions', 's', 's.id = r.submission_id')
+            ->where(
+                $q->expr()->andX(
+                    $q->expr()->eq('s.lead_id', ':lead'),
+                    $q->expr()->eq('s.form_id', ':form'),
+                    $q->expr()->eq('r.'.$field, ':value')
+                )
+            )
+            ->setParameter('lead', $lead->getId())
+            ->setParameter('form', $formId)
+            ->setParameter('value', $value);
+
+        $result = $q->execute()->fetch();
+        return !empty($result['id']);
+    }
+
+    /**
      * Return Forms with results to contacts tab.
      *
      * @param int $leadId
@@ -269,24 +362,8 @@ class FormTabHelper
         $lead = $this->leadModel->getLead($leadId);
 
         $formResults = [];
-        $filters     = [];
-        //  $filters[]      = ['column' => 'f.inContactTab', 'expr' => 'eq', 'value' => 1];
+        $formEntities = $this->getFormsEntities();
 
-        $permissions = $this->security->isGranted(
-            [
-                'form:forms:viewown',
-                'form:forms:viewother',
-            ],
-            'RETURN_ARRAY'
-        );
-        if ($permissions['form:forms:viewown'] && !$permissions['form:forms:viewother']) {
-            $filters[] = ['column' => 'f.createdBy', 'expr' => 'eq', 'value' => $this->userHelper->getUser()->getId()];
-        }
-        $formEntities = $this->formModel->getEntities(
-            [
-                'filter' => ['force' => $filters],
-            ]
-        );
         foreach ($formEntities as $key => $entity) {
             /** @var Form $form */
             $form = $entity[0];
@@ -307,6 +384,14 @@ class FormTabHelper
         $this->resultCache = array_values($formResults);
 
         return $this->resultCache;
+    }
+
+    /**
+     * @return FormModel
+     */
+    public function getFormModel()
+    {
+        return $this->formModel;
     }
 
     /**

@@ -54,6 +54,13 @@ return [
                     'request_stack'
                 ],
             ],
+            'mautic.extendee.form.tab.campaign.date.value.subscriber' => [
+                'class'     => \MauticPlugin\MauticExtendeeFormTabBundle\EventListener\CampaignFormDateConditionSubscriber::class,
+                'arguments' => [
+                    'mautic.extendee.form.tab.helper',
+                    'mautic.helper.core_parameters'
+                ],
+            ],
         ],
         'forms' => [
             'mautic.form.tab.type.submission' => [
@@ -67,6 +74,12 @@ return [
                     'request_stack'
                 ],
                 'alias' => 'form_tab_modify_result',
+            ],
+            'mautic.form.tab.type.campaign.form.field.date.condition' => [
+                'class' => \MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\CampaignFormDateConditionType::class,
+                'arguments' => [
+                    'mautic.extendee.form.tab.helper',
+                ],
             ],
         ],
         'other' => [
@@ -97,6 +110,7 @@ return [
                     'mautic.form.model.submission',
                     'mautic.helper.integration',
                     'mautic.lead.model.lead',
+                    'doctrine.orm.entity_manager'
                 ],
             ],
         ],
