@@ -12,6 +12,7 @@
 namespace MauticPlugin\MauticExtendeeFormTabBundle\EventListener;
 
 use Mautic\CampaignBundle\CampaignEvents;
+use Mautic\CampaignBundle\Entity\Event;
 use Mautic\CampaignBundle\Entity\LeadEventLog;
 use Mautic\CampaignBundle\Event\CampaignBuilderEvent;
 use Mautic\CampaignBundle\Event\CampaignExecutionEvent;
@@ -188,6 +189,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                     'source' => [
                         'condition' => [
                             'form.field_value',
+                            'form.tab.date.condition',
                         ],
                     ],
                 ],
@@ -202,6 +204,17 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 'batchEventName' => FormTabEvents::ON_CAMPAIGN_BATCH_ACTION,
                 'formType'       => ModifyFormResultType::class,
                 'formTheme'      => 'MauticExtendeeFormTabBundle:FormTheme\ModifyFormResultType',
+                'connectionRestrictions' => [
+                    'anchor' => [
+                        'condition.inaction',
+                    ],
+                    'source' => [
+                        'condition' => [
+                            'form.field_value',
+                            'form.tab.date.condition',
+                        ],
+                    ],
+                ],
             ]
         );
     }
@@ -218,7 +231,6 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         if (!$event->checkContext('modify.form.result')) {
             return;
         }
-
         $config = $event->getEvent()->getProperties();
         $form   = $this->formModel->getRepository()->findOneById($config['form']);
 
@@ -230,6 +242,17 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
 
         $event->setChannel('form', $config['form']);
 
+        /** @var Event $eventParent */
+        $eventParent = $event->getEvent()->getParent();
+        if (empty($eventParent) || !in_array(
+                $eventParent->getType(),
+                ['form.tab.date.condition', 'form.field_value']
+            )
+        ) {
+            $event->failAll('Parent condition not found.');
+
+            return;
+        }
         // Determine if this email is transactional/marketing
         $pending    = $event->getPending();
         $contacts   = $event->getContacts();
@@ -240,19 +263,23 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
          * @var Lead $contact
          */
         foreach ($contacts as $logId => $contact) {
-
             $formResults = $this->formTabHelper->getFormWithResult($form, $contact->getId(), true);
             if (empty($formResults['results']['count'])) {
                 unset($contactIds[$contact->getId()]);;
                 continue;
             }
-            $errors = [];
+            $results    = $this->formTabHelper->formResultsFromFromEvent($eventParent, $contact);
+            $resultsIds = array_column($results, 'id');
+            $errors     = [];
             foreach ($formResults['results']['results'] as $results) {
+                if (!in_array($results['id'], $resultsIds)) {
+                    continue;
+                }
                 $fields               = $results['results'];
                 $post                 = [];
                 $post['submissionId'] = $results['id'];
                 foreach ($fields as $field) {
-                    if (!empty(($config['content'][$field['alias']]))) {
+                    if (!empty($config['content'][$field['alias']])) {
                         $post[$field['alias']] = $config['content'][$field['alias']];
                     } else {
                         $post[$field['alias']] = $field['value'];
@@ -319,7 +346,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
             $formId = $eventParent->getProperties()['form'];
         } else {
             // If form date value condition
-            list($formId, $fieldId) = explode('-', $eventParent->getProperties()['field']);
+            list($formId, $fieldId) = explode('|', $eventParent->getProperties()['field']);
         }
 
         $form = $this->formModel->getRepository()->findOneById($formId);
@@ -373,8 +400,15 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 continue;
             }
 
+            $results    = $this->formTabHelper->formResultsFromFromEvent($eventParent, $contact);
+            $resultsIds = array_column($results, 'id');
+
             $reason = [];
             foreach ($formResults['results']['results'] as $results) {
+                // check
+                if (!in_array($results['id'], $resultsIds)) {
+                    continue;
+                }
                 $tokens          = $this->findTokens($emailContent, $results['results']);
                 $newEmailContent = str_replace(array_keys($tokens), $tokens, $emailContent);
                 // replace all form field tokens

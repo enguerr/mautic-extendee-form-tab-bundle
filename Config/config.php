@@ -51,7 +51,7 @@ return [
                     'mautic.form.model.submission',
                     'mautic.extendee.form.tab.helper',
                     'mautic.extendee.form.tab.service.save_submission',
-                    'request_stack'
+                    'request_stack',
                 ],
             ],
             'mautic.extendee.form.tab.campaign.date.value.subscriber' => [
@@ -110,7 +110,8 @@ return [
                     'mautic.form.model.submission',
                     'mautic.helper.integration',
                     'mautic.lead.model.lead',
-                    'doctrine.orm.entity_manager'
+                    'doctrine.orm.entity_manager',
+                    'mautic.helper.core_parameters'
                 ],
             ],
         ],

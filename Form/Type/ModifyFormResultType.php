@@ -97,7 +97,14 @@ class ModifyFormResultType extends AbstractType
                 }
                 if(!empty($content)){
                     foreach ($content as $key=>$value) {
-                        $this->requestStack->getCurrentRequest()->query->set($key, urlencode($value));
+                        if (is_string($value)) {
+                            $this->requestStack->getCurrentRequest()->query->set($key, urlencode($value));
+                        }else{
+                            if (is_array($value)) {
+                                $value = implode('|', $value);
+                            }
+                            $this->requestStack->getCurrentRequest()->query->set($key, $value);
+                        }
                     }
                 }
                 $content = $this->formTabHelper->getFormContentFromId($data['form'], true, 'name="campaignevent[properties][content]');

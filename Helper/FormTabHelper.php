@@ -13,6 +13,7 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Helper;
 
 use Doctrine\ORM\EntityManager;
 use Joomla\Http\Http;
+use Mautic\CoreBundle\Helper\CoreParametersHelper;
 use Mautic\CoreBundle\Helper\TemplatingHelper;
 use Mautic\CoreBundle\Helper\UserHelper;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
@@ -75,6 +76,11 @@ class FormTabHelper
     private $entityManager;
 
     /**
+     * @var CoreParametersHelper
+     */
+    private $coreParametersHelper;
+
+    /**
      * FormTabHelper constructor.
      *
      * @param TemplatingHelper                     $templatingHelper
@@ -85,6 +91,7 @@ class FormTabHelper
      * @param IntegrationHelper|IntegrationHeZlper $integrationHelper
      * @param LeadModel                            $leadModel
      * @param EntityManager                        $entityManager
+     * @param CoreParametersHelper                 $coreParametersHelper
      */
     public function __construct(
         TemplatingHelper $templatingHelper,
@@ -94,17 +101,19 @@ class FormTabHelper
         SubmissionModel $submissionModel,
         IntegrationHelper $integrationHelper,
         LeadModel $leadModel,
-        EntityManager $entityManager
+        EntityManager $entityManager,
+        CoreParametersHelper $coreParametersHelper
     ) {
 
-        $this->formModel         = $formModel;
-        $this->templatingHelper  = $templatingHelper;
-        $this->userHelper        = $userHelper;
-        $this->security          = $security;
-        $this->submissionModel   = $submissionModel;
-        $this->integrationHelper = $integrationHelper;
-        $this->leadModel         = $leadModel;
-        $this->entityManager = $entityManager;
+        $this->formModel            = $formModel;
+        $this->templatingHelper     = $templatingHelper;
+        $this->userHelper           = $userHelper;
+        $this->security             = $security;
+        $this->submissionModel      = $submissionModel;
+        $this->integrationHelper    = $integrationHelper;
+        $this->leadModel            = $leadModel;
+        $this->entityManager        = $entityManager;
+        $this->coreParametersHelper = $coreParametersHelper;
     }
 
     /**
@@ -131,14 +140,15 @@ class FormTabHelper
      */
     public function getFormContent(Form $form, $populate = false, $replaceAttrName = null)
     {
-        $html = $this->formModel->getContent($form, false, false);
-
+        $formId = $form->getId();
+        $html   = $this->formModel->getContent($form, false, false);
         if ($replaceAttrName) {
             $html = str_replace('name="mauticform', $replaceAttrName, $html);
 
         }
-
         if (true === $populate) {
+            $this->formModel->getRepository()->clear();
+            $form = $this->formModel->getEntity($formId);
             $this->formModel->populateValuesWithGetParameters($form, $html);
         }
 
@@ -248,6 +258,7 @@ class FormTabHelper
                 ]
             );
         }
+
         return $return;
     }
 
@@ -258,7 +269,7 @@ class FormTabHelper
      */
     public function getFormsEntities()
     {
-        $filters     = [];
+        $filters = [];
 
         $permissions = $this->security->isGranted(
             [
@@ -270,6 +281,7 @@ class FormTabHelper
         if ($permissions['form:forms:viewown'] && !$permissions['form:forms:viewother']) {
             $filters[] = ['column' => 'f.createdBy', 'expr' => 'eq', 'value' => $this->userHelper->getUser()->getId()];
         }
+
         return $this->formModel->getEntities(
             [
                 'filter' => ['force' => $filters],
@@ -287,8 +299,8 @@ class FormTabHelper
         $forms = $this->getFormsEntities();
         foreach ($forms as $entity) {
             /** @var Form $form */
-            $form = $entity[0];
-            $fields =  $form->getFields();
+            $form   = $entity[0];
+            $fields = $form->getFields();
             /** @var Field $field */
             foreach ($fields as $field) {
                 if (in_array($field->getType(), ['date'])) {
@@ -296,22 +308,41 @@ class FormTabHelper
                 }
             }
         }
+
         return $dateFields;
     }
 
     /**
-     * Compare a form result value with defined date value for defined lead.
+     * Compare a form result value with defined value for lead.
      *
-     * @param Form                   $form
-     * @param CampaignExecutionEvent $event
-     * @param string                 $value to compare with
+     * @param        $form
+     * @param Lead   $lead
+     * @param        $field
+     * @param        $value
+     * @param string $operatorExpr
      *
      * @return bool
      */
-    public function compareDateValue($form, Lead $lead, $field, $value)
+    public function compareValue($form, Lead $lead, $field, $value, $operatorExpr = 'eq')
     {
+        // Modify operator
+        switch ($operatorExpr) {
+            case 'startsWith':
+                $operatorExpr = 'like';
+                $value        = $value.'%';
+                break;
+            case 'endsWith':
+                $operatorExpr = 'like';
+                $value        = '%'.$value;
+                break;
+            case 'contains':
+                $operatorExpr = 'like';
+                $value        = '%'.$value.'%';
+                break;
+        }
+
         $formAlias = $form->getAlias();
-        $formId = $form->getId();
+        $formId    = $form->getId();
 
         //use DBAL to get entity fields
         $q = $this->entityManager->getConnection()->createQueryBuilder();
@@ -322,15 +353,81 @@ class FormTabHelper
                 $q->expr()->andX(
                     $q->expr()->eq('s.lead_id', ':lead'),
                     $q->expr()->eq('s.form_id', ':form'),
-                    $q->expr()->eq('r.'.$field, ':value')
+                    $q->expr()->$operatorExpr('r.'.$field, ':value')
                 )
             )
             ->setParameter('lead', $lead->getId())
             ->setParameter('form', $formId)
             ->setParameter('value', $value);
+        $results = $q->execute()->fetchAll();
+        return $results;
+    }
 
-        $result = $q->execute()->fetch();
-        return !empty($result['id']);
+
+    /**
+     * @param array $eventParent
+     *
+     * @return array
+     */
+    private function getFormIdFromEvent($eventParent)
+    {
+        $fieldAlias = null;
+        // If form value condition
+        if ($eventParent->getType() === 'form.field_value') {
+            $formId = $eventParent->getProperties()['form'];
+            $fieldAlias = $eventParent->getProperties()['field'];
+        } else {
+            // If form date value condition
+            list($formId, $fieldAlias) = explode('|', $eventParent->getProperties()['field']);
+        }
+
+        return [$formId, $fieldAlias];
+    }
+
+    /**
+     * @param $config
+     *
+     * @return string
+     */
+    public function getDate($config)
+    {
+        $triggerDate = new \DateTime(
+            'now',
+            new \DateTimeZone($this->coreParametersHelper->getParameter('default_timezone'))
+        );
+        $interval    = substr($config['interval'], 1); // remove 1st character + or -
+        $unit        = strtoupper($config['unit']);
+        if (strpos($config['interval'], '+') !== false) { //add date
+            $triggerDate->add(new \DateInterval('P'.$interval.$unit)); //add the today date with interval
+        } elseif (strpos($config['interval'], '-') !== false) {
+            $triggerDate->sub(new \DateInterval('P'.$interval.$unit)); //subtract the today date with interval
+        }
+
+        return $triggerDate->format('Y-m-d');
+    }
+
+
+    /**
+     * @param      $event
+     * @param Lead $contact
+     *
+     * @return bool
+     */
+    public function formResultsFromFromEvent($event, Lead $lead)
+    {
+        list($formId, $fieldAlias) = $this->getFormIdFromEvent($event);
+        $operators  = $this->formModel->getFilterExpressionFunctions();
+        $form       = $this->formModel->getRepository()->findOneById($formId);
+        $operator   = 'eq';
+        $properties = $event->getProperties();
+        if (!empty($properties['operator'])) {
+            $operator = $operators[$properties['operator']]['expr'];
+            $value    = $properties['value'];
+        } else {
+            $value = $this->getDate($properties);
+        }
+
+        return $this->compareValue($form, $lead, $fieldAlias, $value, $operator);
     }
 
     /**
@@ -361,7 +458,7 @@ class FormTabHelper
 
         $lead = $this->leadModel->getLead($leadId);
 
-        $formResults = [];
+        $formResults  = [];
         $formEntities = $this->getFormsEntities();
 
         foreach ($formEntities as $key => $entity) {

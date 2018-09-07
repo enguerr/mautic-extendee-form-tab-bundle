@@ -103,19 +103,9 @@ class CampaignFormDateConditionSubscriber implements EventSubscriberInterface
             return;
         }
 
-        // Set the date in system timezone since this is triggered by cron
-        $triggerDate = new \DateTime(
-            'now',
-            new \DateTimeZone($this->coreParametersHelper->getParameter('default_timezone'))
-        );
-        $interval = substr($config['interval'], 1); // remove 1st character + or -
-        $unit = strtoupper($config['unit']);
-        if (strpos($config['interval'], '+') !== false) { //add date
-            $triggerDate->add(new \DateInterval('P'.$interval.$unit)); //add the today date with interval
-        } elseif (strpos($config['interval'], '-') !== false) {
-            $triggerDate->sub(new \DateInterval('P'.$interval.$unit)); //subtract the today date with interval
-        }
-        if ($this->formTabHelper->compareDateValue($form, $lead, $fieldAlias, $triggerDate->format('Y-m-d'))) {
+
+        $results = $this->formTabHelper->compareValue($form, $lead, $fieldAlias, $this->formTabHelper->getDate($config));
+        if (!empty($results)) {
             $event->pass();
         } else {
             $event->fail();
