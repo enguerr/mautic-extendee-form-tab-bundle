@@ -96,7 +96,7 @@ class CampaignFormDateConditionType extends AbstractType
 
         $choices = [];
         foreach (['i', 'h', 'd', 'm', 'y'] as $interval) {
-            $choices[$interval] = $interval;
+            $choices[$interval] = 'mautic.campaign.event.intervalunit.choice.'.$interval;
         }
 
         $builder->add(
