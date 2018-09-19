@@ -102,6 +102,7 @@ class SubmissionController extends FormController
         }
 
         $html = $formTabHelper->getFormContent($form, true);
+        $form     = $model->getEntity($formId);
 
         $action = $router->generate(
             'mautic_formtabsubmission_edit',
