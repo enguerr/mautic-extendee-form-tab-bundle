@@ -265,9 +265,9 @@ class SubmissionController extends FormController
     {
 
         $form     = $submission->getForm();
+        $form = $this->getModel('form')->getEntity($form->getId());
         $formName = $form->generateFormName();
-
-        $fields = $form->getFields();
+        $fields  =  $form->getFields();
         /** @var \Mautic\FormBundle\Entity\Field $f */
         foreach ($fields as $f) {
             if (!empty($submission->getResults()[$f->getAlias()])) {
@@ -286,7 +286,6 @@ class SubmissionController extends FormController
     public function populateField(Field $field, $value, $formName, &$formHtml)
     {
         $alias = $field->getAlias();
-
         switch ($field->getType()) {
             case 'text':
             case 'email':
@@ -296,7 +295,7 @@ class SubmissionController extends FormController
             case 'datetime':
             case 'url':
                 if (preg_match(
-                    '/<input(.*?)id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)value="(.*?)"(.*?)\/>/i',
+                    '/<input(.*?)id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)value="(.*?)"(.*?)>/i',
                     $formHtml,
                     $match
                 )) {
@@ -322,14 +321,16 @@ class SubmissionController extends FormController
             case 'checkboxgrp':
                 if (is_string($value) && strrpos($value, '|') > 0) {
                     $value = explode('|', $value);
+                }elseif (is_string($value) && strrpos($value, ',') > 0) {
+                    $value = explode(',', $value);
                 } elseif (!is_array($value)) {
                     $value = [$value];
                 }
 
                 foreach ($value as $val) {
-                    $val = $this->sanitizeValue($val);
+                    $val = $this->sanitizeValue(trim($val));
                     if (preg_match(
-                        '/<input(.*?)id="mauticform_checkboxgrp_checkbox(.*?)"(.*?)value="'.$val.'"(.*?)\/>/i',
+                        '/<input(.*?)id="mauticform_checkboxgrp_checkbox(.*?)"(.*?)value="'.$val.'"(.*?)>/i',
                         $formHtml,
                         $match
                     )) {
@@ -342,7 +343,7 @@ class SubmissionController extends FormController
             case 'radiogrp':
                 $value = $this->sanitizeValue($value);
                 if (preg_match(
-                    '/<input(.*?)id="mauticform_radiogrp_radio(.*?)"(.*?)value="'.$value.'"(.*?)\/>/i',
+                    '/<input(.*?)id="mauticform_radiogrp_radio(.*?)"(.*?)value="'.$value.'"(.*?)>/i',
                     $formHtml,
                     $match
                 )) {
@@ -355,13 +356,15 @@ class SubmissionController extends FormController
             case 'country':
                 $regex = '/<select\s*id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)<\/select>/is';
                 if (preg_match($regex, $formHtml, $match)) {
+                    $valuesArray = explode(',', $value);
                     $origText = $match[0];
-                    $replace  = str_replace(
-                        '<option value="'.$this->sanitizeValue($value).'">',
-                        '<option value="'.$this->sanitizeValue($value).'" selected="selected">',
-                        $origText
-                    );
-                    $formHtml = str_replace($origText, $replace, $formHtml);
+                    $replace = [];
+                    foreach ($valuesArray as $value) {
+                        $value = trim($value);
+                        $replace['<option value="'.$this->sanitizeValue($value).'">'] = '<option value="'.$this->sanitizeValue($value).'" selected="selected">';
+                    }
+
+                    $formHtml = str_replace($origText, str_replace(array_keys($replace), $replace, $origText), $formHtml);
                 }
 
                 break;
