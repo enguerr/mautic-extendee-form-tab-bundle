@@ -14,6 +14,7 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Controller;
 use Mautic\CoreBundle\Controller\FormController;
 use Mautic\CoreBundle\Helper\InputHelper;
 use Mautic\FormBundle\Entity\Field;
+use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Entity\Submission;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
@@ -101,8 +102,11 @@ class SubmissionController extends FormController
             );
         }
 
-        $html = $formTabHelper->getFormContent($form, true);
+        $html = $formTabHelper->getFormContent($form);
         $form     = $model->getEntity($formId);
+        $this->getModel('form.form')->getRepository()->clear();
+        $form = $this->getModel('form.form')->getEntity($formId);
+        $this->populateValuesWithGetParameters($form, $html);
 
         $action = $router->generate(
             'mautic_formtabsubmission_edit',
@@ -141,7 +145,6 @@ class SubmissionController extends FormController
             if (!empty($return)) {
                 //remove mauticError and mauticMessage from the referer so it doesn't get sent back
                 $return = InputHelper::url($return, null, null, null, ['mauticError', 'mauticMessage'], true);
-                $query  = (strpos($return, '?') === false) ? '?' : '&';
             }
 
             $valid = true;
@@ -256,6 +259,26 @@ class SubmissionController extends FormController
                 ],
             ]
         );
+    }
+
+    /**
+     * Writes in form values from get parameters.
+     *
+     * @param $form
+     * @param $formHtml
+     */
+    private function populateValuesWithGetParameters(Form $form, &$formHtml)
+    {
+        $formName = $form->generateFormName();
+        $fields = $form->getFields()->toArray();
+        /** @var \Mautic\FormBundle\Entity\Field $f */
+        foreach ($fields as $f) {
+            $alias = $f->getAlias();
+            if ($this->request->query->has($alias)) {
+                $value = $this->request->query->get($alias);
+                $this->populateField($f, $value, $formName, $formHtml);
+            }
+        }
     }
 
     /**
