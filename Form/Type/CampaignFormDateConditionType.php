@@ -83,7 +83,8 @@ class CampaignFormDateConditionType extends AbstractType
                 'label'       => '',
                 'attr'        => [
                     'class' => 'form-control',
-                    'preaddon'=>'symbol-hashtag'
+                    'preaddon'=>'symbol-hashtag',
+                    'data-show-on' => '{"campaignevent_properties_unit":["i", "h", "d", "m", "y"]}',
                 ],
                 'data'=> empty($options['data']['interval']) ? 0 : $options['data']['interval'],
                 'constraints' => [
@@ -95,7 +96,12 @@ class CampaignFormDateConditionType extends AbstractType
         );
 
         $choices = [];
-        foreach (['i', 'h', 'd', 'm', 'y'] as $interval) {
+        $choices['anniversary'] = 'mautic.campaign.event.intervalunit.choice.anniversary';
+        $choices['+P0D'] = 'mautic.campaign.event.intervalunit.choice.today';
+        $choices['-P1D'] = 'mautic.campaign.event.intervalunit.choice.yesterday';
+        $choices['+P1D'] = 'mautic.campaign.event.intervalunit.choice.tomorrow';
+
+        foreach (['i', 'h', 'd', 'm', 'y', 'anniversary'] as $interval) {
             $choices[$interval] = 'mautic.campaign.event.intervalunit.choice.'.$interval;
         }
 

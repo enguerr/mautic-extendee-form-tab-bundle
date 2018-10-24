@@ -312,34 +312,20 @@ class FormTabHelper
         return $dateFields;
     }
 
+
     /**
      * Compare a form result value with defined value for lead.
      *
      * @param        $form
      * @param Lead   $lead
      * @param        $field
-     * @param        $value
+     * @param        $date
      * @param string $operatorExpr
      *
      * @return bool
      */
-    public function compareValue($form, Lead $lead, $field, $value, $operatorExpr = 'eq')
+    public function compareValue($form, Lead $lead, $field, $date, $operatorExpr = 'eq')
     {
-        // Modify operator
-        switch ($operatorExpr) {
-            case 'startsWith':
-                $operatorExpr = 'like';
-                $value        = $value.'%';
-                break;
-            case 'endsWith':
-                $operatorExpr = 'like';
-                $value        = '%'.$value;
-                break;
-            case 'contains':
-                $operatorExpr = 'like';
-                $value        = '%'.$value.'%';
-                break;
-        }
 
         $formAlias = $form->getAlias();
         $formId    = $form->getId();
@@ -352,13 +338,26 @@ class FormTabHelper
             ->where(
                 $q->expr()->andX(
                     $q->expr()->eq('s.lead_id', ':lead'),
-                    $q->expr()->eq('s.form_id', ':form'),
-                    $q->expr()->$operatorExpr('r.'.$field, ':value')
+                    $q->expr()->eq('s.form_id', ':form')
                 )
             )
             ->setParameter('lead', $lead->getId())
-            ->setParameter('form', $formId)
-            ->setParameter('value', $value);
+            ->setParameter('form', $formId);
+
+        if ($operatorExpr === 'anniversary') {
+            $q->andWhere(
+                $q->expr()->andX(
+                    $q->expr()->eq("MONTH(r. $field)", ':month'),
+                    $q->expr()->eq("DAY(r. $field)", ':day')
+                )
+            )
+                ->setParameter('month', $date->format('m'))
+                ->setParameter('day', $date->format('d'));
+        } else {
+            $q->andWhere($q->expr()->eq('r.'.$field, ':value'))
+                ->setParameter('value', $date->format('Y-m-d'));
+        }
+
         $results = $q->execute()->fetchAll();
         return $results;
     }
@@ -374,7 +373,7 @@ class FormTabHelper
         $fieldAlias = null;
         // If form value condition
         if ($eventParent->getType() === 'form.field_value') {
-            $formId = $eventParent->getProperties()['form'];
+            $formId     = $eventParent->getProperties()['form'];
             $fieldAlias = $eventParent->getProperties()['field'];
         } else {
             // If form date value condition
@@ -387,7 +386,7 @@ class FormTabHelper
     /**
      * @param $config
      *
-     * @return string
+     * @return \DateTime
      */
     public function getDate($config)
     {
@@ -397,13 +396,28 @@ class FormTabHelper
         );
         $interval    = substr($config['interval'], 1); // remove 1st character + or -
         $unit        = strtoupper($config['unit']);
-        if (strpos($config['interval'], '+') !== false) { //add date
-            $triggerDate->add(new \DateInterval('P'.$interval.$unit)); //add the today date with interval
+
+        $trigger = '';
+        $type = '';
+        if (strpos($config['unit'], '+') !== false) {
+            $trigger = substr($config['unit'], 1);
+            $type = 'add';
+        }elseif (strpos($config['unit'], '-') !== false) {
+            $trigger = substr($config['unit'], 1);
+            $type = 'sub';
+        }elseif (strpos($config['interval'], '+') !== false) {
+            $trigger = 'P'.$interval.$unit;
+            $type = 'add';
         } elseif (strpos($config['interval'], '-') !== false) {
-            $triggerDate->sub(new \DateInterval('P'.$interval.$unit)); //subtract the today date with interval
+            $trigger = 'P'.$interval.$unit;
+            $type = 'sub';
         }
 
-        return $triggerDate->format('Y-m-d');
+        if ($trigger) {
+            $triggerDate->$type(new \DateInterval($trigger)); //subtract the today date with interval
+        }
+
+        return $triggerDate;
     }
 
 
