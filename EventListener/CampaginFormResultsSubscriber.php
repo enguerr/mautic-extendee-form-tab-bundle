@@ -35,7 +35,6 @@ use Mautic\LeadBundle\Entity\Lead;
 use Mautic\LeadBundle\Model\LeadModel;
 use Mautic\PageBundle\Entity\Hit;
 use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\ModifyFormResultType;
-use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\SubmissionType;
 use MauticPlugin\MauticExtendeeFormTabBundle\FormTabEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission;
@@ -253,6 +252,15 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
 
             return;
         }
+
+        // Return failed If parent form ID  not equal to modified form reuslts
+        list($formId, $fieldAlias) = $this->formTabHelper->getFormIdFromEvent($eventParent);
+        if ($formId != $config['form']) {
+            $event->failAll('Parent form #'.$formId.' not same like form what you want to modify #'.$config['form']);
+            return;
+        }
+
+
         // Determine if this email is transactional/marketing
         $pending    = $event->getPending();
         $contacts   = $event->getContacts();
@@ -265,7 +273,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         foreach ($contacts as $logId => $contact) {
             $formResults = $this->formTabHelper->getFormWithResult($form, $contact->getId(), true);
             if (empty($formResults['results']['count'])) {
-                unset($contactIds[$contact->getId()]);;
+                unset($contactIds[$contact->getId()]);
+                $event->fail($pending->get($logId), 'No form results for contact #'.$contact->getId());
                 continue;
             }
             $results    = $this->formTabHelper->formResultsFromFromEvent($eventParent, $contact);

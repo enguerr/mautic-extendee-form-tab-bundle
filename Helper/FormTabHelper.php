@@ -26,6 +26,7 @@ use Mautic\LeadBundle\Entity\Lead;
 use Mautic\LeadBundle\Model\LeadModel;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Integration\FormTabIntegration;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * Class FormTabHelper.
@@ -81,6 +82,11 @@ class FormTabHelper
     private $coreParametersHelper;
 
     /**
+     * @var RequestStack
+     */
+    private $request;
+
+    /**
      * FormTabHelper constructor.
      *
      * @param TemplatingHelper                     $templatingHelper
@@ -92,6 +98,7 @@ class FormTabHelper
      * @param LeadModel                            $leadModel
      * @param EntityManager                        $entityManager
      * @param CoreParametersHelper                 $coreParametersHelper
+     * @param RequestStack                         $requestStack
      */
     public function __construct(
         TemplatingHelper $templatingHelper,
@@ -102,7 +109,8 @@ class FormTabHelper
         IntegrationHelper $integrationHelper,
         LeadModel $leadModel,
         EntityManager $entityManager,
-        CoreParametersHelper $coreParametersHelper
+        CoreParametersHelper $coreParametersHelper,
+        RequestStack $requestStack
     ) {
 
         $this->formModel            = $formModel;
@@ -114,6 +122,7 @@ class FormTabHelper
         $this->leadModel            = $leadModel;
         $this->entityManager        = $entityManager;
         $this->coreParametersHelper = $coreParametersHelper;
+        $this->request              = $requestStack;
     }
 
     /**
@@ -149,7 +158,7 @@ class FormTabHelper
         if (true === $populate) {
             $this->formModel->getRepository()->clear();
             $form = $this->formModel->getEntity($formId);
-            $this->formModel->populateValuesWithGetParameters($form, $html);
+            $this->populateValuesWithGetParameters($form, $html);
         }
 
         $html = preg_replace('/<form(.*)>/', '', $html, 1);
@@ -319,16 +328,33 @@ class FormTabHelper
      * @param        $form
      * @param Lead   $lead
      * @param        $field
-     * @param        $date
+     * @param        $value
      * @param string $operatorExpr
      *
      * @return bool
      */
-    public function compareValue($form, Lead $lead, $field, $date, $operatorExpr = 'eq')
+    public function compareValue($form, Lead $lead, $field, $value, $operatorExpr = 'eq')
     {
 
         $formAlias = $form->getAlias();
         $formId    = $form->getId();
+
+
+        // Modify operator
+        switch ($operatorExpr) {
+            case 'startsWith':
+                $operatorExpr    = 'like';
+                $value           = $value.'%';
+                break;
+            case 'endsWith':
+                $operatorExpr   = 'like';
+                $value          = '%'.$value;
+                break;
+            case 'contains':
+                $operatorExpr   = 'like';
+                $value          = '%'.$value.'%';
+                break;
+        }
 
         //use DBAL to get entity fields
         $q = $this->entityManager->getConnection()->createQueryBuilder();
@@ -351,11 +377,14 @@ class FormTabHelper
                     $q->expr()->eq("DAY(r. $field)", ':day')
                 )
             )
-                ->setParameter('month', $date->format('m'))
-                ->setParameter('day', $date->format('d'));
-        } else {
+                ->setParameter('month', $value->format('m'))
+                ->setParameter('day', $value->format('d'));
+        } elseif($operatorExpr === 'date') {
             $q->andWhere($q->expr()->eq('r.'.$field, ':value'))
-                ->setParameter('value', $date->format('Y-m-d'));
+                ->setParameter('value', $value->format('Y-m-d'));
+        }else{
+            $q->andWhere($q->expr()->$operatorExpr('r.'.$field, ':value'))
+                ->setParameter('value', $value);
         }
 
         $results = $q->execute()->fetchAll();
@@ -368,7 +397,7 @@ class FormTabHelper
      *
      * @return array
      */
-    private function getFormIdFromEvent($eventParent)
+    public function getFormIdFromEvent($eventParent)
     {
         $fieldAlias = null;
         // If form value condition
@@ -437,10 +466,13 @@ class FormTabHelper
         if (!empty($properties['operator'])) {
             $operator = $operators[$properties['operator']]['expr'];
             $value    = $properties['value'];
-        } else {
+        } elseif(!empty($properties['unit'])) {
+            $operator = 'date';
+            if ($properties['unit'] === 'anniversary') {
+                $operator = 'anniversary';
+            }
             $value = $this->getDate($properties);
         }
-
         return $this->compareValue($form, $lead, $fieldAlias, $value, $operator);
     }
 
@@ -575,5 +607,148 @@ class FormTabHelper
     public function setResultCache($resultCache)
     {
         $this->resultCache = $resultCache;
+    }
+
+    /**
+     * Writes in form values from get parameters.
+     *
+     * @param $form
+     * @param $formHtml
+     */
+    public function populateValuesWithGetParameters(Form $form, &$formHtml)
+    {
+        $formName = $form->generateFormName();
+        $fields = $form->getFields()->toArray();
+        /** @var \Mautic\FormBundle\Entity\Field $f */
+        foreach ($fields as $f) {
+            $alias = $f->getAlias();
+            if ($this->request->getCurrentRequest()->query->has($alias)) {
+                $value = $this->request->getCurrentRequest()->query->get($alias);
+                $this->populateField($f, $value, $formName, $formHtml);
+            }
+        }
+    }
+
+    /**
+     * @param      $formHtml
+     */
+    public function populateValuesWithLead(Submission $submission, &$formHtml)
+    {
+
+        $form     = $submission->getForm();
+        $form = $this->getModel('form')->getEntity($form->getId());
+        $formName = $form->generateFormName();
+        $fields  =  $form->getFields();
+        /** @var \Mautic\FormBundle\Entity\Field $f */
+        foreach ($fields as $f) {
+            if (!empty($submission->getResults()[$f->getAlias()])) {
+                $value = $submission->getResults()[$f->getAlias()];
+                $this->populateField($f, $value, $formName, $formHtml);
+            }
+        }
+    }
+
+    /**
+     * @param $field
+     * @param $value
+     * @param $formName
+     * @param $formHtml
+     */
+    public function populateField(Field $field, $value, $formName, &$formHtml)
+    {
+        $alias = $field->getAlias();
+        switch ($field->getType()) {
+            case 'text':
+            case 'email':
+            case 'hidden':
+            case 'number':
+            case 'date':
+            case 'datetime':
+            case 'url':
+                if (preg_match(
+                    '/<input(.*?)id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)value="(.*?)"(.*?)>/i',
+                    $formHtml,
+                    $match
+                )) {
+                    $replace  = '<input'.$match[1].'id="mauticform_input_'.$formName.'_'.$alias.'"'.$match[2].'value="'.$this->sanitizeValue(
+                            $value
+                        ).'"'
+                        .$match[4].'/>';
+                    $formHtml = str_replace($match[0], $replace, $formHtml);
+                }
+                break;
+            case 'textarea':
+                if (preg_match(
+                    '/<textarea(.*?)id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)>(.*?)<\/textarea>/i',
+                    $formHtml,
+                    $match
+                )) {
+                    $replace  = '<textarea'.$match[1].'id="mauticform_input_'.$formName.'_'.$alias.'"'.$match[2].'>'.$this->sanitizeValue(
+                            $value
+                        ).'</textarea>';
+                    $formHtml = str_replace($match[0], $replace, $formHtml);
+                }
+                break;
+            case 'checkboxgrp':
+                if (is_string($value) && strrpos($value, '|') > 0) {
+                    $value = explode('|', $value);
+                }elseif (is_string($value) && strrpos($value, ',') > 0) {
+                    $value = explode(',', $value);
+                } elseif (!is_array($value)) {
+                    $value = [$value];
+                }
+
+                foreach ($value as $val) {
+                    $val = $this->sanitizeValue(trim($val));
+                    if (preg_match(
+                        '/<input(.*?)id="mauticform_checkboxgrp_checkbox(.*?)"(.*?)value="'.$val.'"(.*?)>/i',
+                        $formHtml,
+                        $match
+                    )) {
+                        $replace  = '<input'.$match[1].'id="mauticform_checkboxgrp_checkbox'.$match[2].'"'.$match[3].'value="'.$val.'"'
+                            .$match[4].' checked />';
+                        $formHtml = str_replace($match[0], $replace, $formHtml);
+                    }
+                }
+                break;
+            case 'radiogrp':
+                $value = $this->sanitizeValue($value);
+                if (preg_match(
+                    '/<input(.*?)id="mauticform_radiogrp_radio(.*?)"(.*?)value="'.$value.'"(.*?)>/i',
+                    $formHtml,
+                    $match
+                )) {
+                    $replace  = '<input'.$match[1].'id="mauticform_radiogrp_radio'.$match[2].'"'.$match[3].'value="'.$value.'"'.$match[4]
+                        .' checked />';
+                    $formHtml = str_replace($match[0], $replace, $formHtml);
+                }
+                break;
+            case 'select':
+            case 'country':
+                $regex = '/<select\s*id="mauticform_input_'.$formName.'_'.$alias.'"(.*?)<\/select>/is';
+                if (preg_match($regex, $formHtml, $match)) {
+                    $valuesArray = explode(',', $value);
+                    $origText = $match[0];
+                    $replace = [];
+                    foreach ($valuesArray as $value) {
+                        $value = trim($value);
+                        $replace['<option value="'.$this->sanitizeValue($value).'">'] = '<option value="'.$this->sanitizeValue($value).'" selected="selected">';
+                    }
+
+                    $formHtml = str_replace($origText, str_replace(array_keys($replace), $replace, $origText), $formHtml);
+                }
+
+                break;
+        }
+    }
+
+    /**
+     * @param string $value
+     *
+     * @return string
+     */
+    public function sanitizeValue($value)
+    {
+        return str_replace(['"', '>', '<'], ['&quot;', '&gt;', '&lt;'], strip_tags(rawurldecode($value)));
     }
 }

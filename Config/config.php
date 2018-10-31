@@ -111,7 +111,8 @@ return [
                     'mautic.helper.integration',
                     'mautic.lead.model.lead',
                     'doctrine.orm.entity_manager',
-                    'mautic.helper.core_parameters'
+                    'mautic.helper.core_parameters',
+                    'request_stack'
                 ],
             ],
         ],

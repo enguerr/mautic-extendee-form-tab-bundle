@@ -103,7 +103,14 @@ class CampaignFormDateConditionSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $results = $this->formTabHelper->compareValue($form, $lead, $fieldAlias, $this->formTabHelper->getDate($config), $config['unit']);
+        $expr = '';
+        if ($config['unit'] == 'anniversary') {
+            $expr = 'anniversary';
+        }else{
+            $expr = 'date';
+        }
+
+        $results = $this->formTabHelper->compareValue($form, $lead, $fieldAlias, $this->formTabHelper->getDate($config), $expr);
         if (!empty($results)) {
             $event->pass();
         } else {
