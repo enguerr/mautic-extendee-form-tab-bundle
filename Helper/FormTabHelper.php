@@ -636,7 +636,7 @@ class FormTabHelper
     {
 
         $form     = $submission->getForm();
-        $form = $this->getModel('form')->getEntity($form->getId());
+        $form = $this->formModel->getEntity($form->getId());
         $formName = $form->generateFormName();
         $fields  =  $form->getFields();
         /** @var \Mautic\FormBundle\Entity\Field $f */
