@@ -175,7 +175,7 @@ class SubmissionController extends FormController
 
         // prepopulate
         if (!empty($submission)) {
-            $this->populateValuesWithLead($submission, $html);
+            $formTabHelper->populateValuesWithLead($submission, $html);
         }
 
         if ($closeModal) {
