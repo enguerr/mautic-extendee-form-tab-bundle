@@ -426,6 +426,13 @@ class FormTabHelper
         $interval    = substr($config['interval'], 1); // remove 1st character + or -
         $unit        = strtoupper($config['unit']);
 
+        switch ($unit) {
+            case 'H':
+            case 'M':
+            case 'S':
+            $interval = 'T'.$interval;
+        }
+
         $trigger = '';
         $type = '';
         if (strpos($config['unit'], '+') !== false) {
