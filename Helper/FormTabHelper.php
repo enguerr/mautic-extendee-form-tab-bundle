@@ -391,6 +391,36 @@ class FormTabHelper
         return $results;
     }
 
+    /**
+     * @param array $eventParents
+     * @param int $relatedFormId
+     *
+     * @return array
+     */
+    public function getRelatedFormIdsFromEvents($eventParents, $relatedFormId)
+    {
+        $ids =$this->getFormIdFromEvents($eventParents);
+        foreach ($ids as $key=>$id) {
+            if ($relatedFormId !== $id[0]) {
+                unset($ids[$key]);
+            }
+        }
+        return $ids;
+    }
+
+    /**
+     * @param $eventParents
+     *
+     * @return array
+     */
+    public function getFormIdFromEvents($eventParents)
+    {
+        $eventIds = [];
+        foreach ($eventParents as $eventParent) {
+            $eventIds[] = $this->getFormIdFromEvent($eventParent);
+        }
+        return $eventIds;
+    }
 
     /**
      * @param array $eventParent
@@ -455,6 +485,27 @@ class FormTabHelper
 
         return $triggerDate;
     }
+
+    /**
+     * @param      $eventParents
+     * @param Lead $lead
+     *
+     * @return array
+     */
+    public function formResultsFromFromEvents($eventParents, Lead $lead)
+    {
+        $submissionIds = [];
+        foreach ($eventParents as $eventParent) {
+            $results = $this->formResultsFromFromEvent($eventParent, $lead);
+            $resultsIds = array_column($results, 'id');
+            if (!empty($submissionIds)) {
+                $resultsIds = array_intersect($submissionIds, $resultsIds);
+            }
+            $submissionIds  = $resultsIds;
+                }
+        return $submissionIds;
+    }
+
 
 
     /**
