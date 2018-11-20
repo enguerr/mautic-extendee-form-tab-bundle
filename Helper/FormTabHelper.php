@@ -354,6 +354,10 @@ class FormTabHelper
                 $operatorExpr   = 'like';
                 $value          = '%'.$value.'%';
                 break;
+            case 'like':
+            case 'notLike':
+                $value = strpos($value, '%') === false ? '%'.$value.'%' : $value;
+                break;
         }
 
         //use DBAL to get entity fields
