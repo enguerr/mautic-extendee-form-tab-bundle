@@ -457,8 +457,14 @@ class FormTabHelper
             'now',
             new \DateTimeZone($this->coreParametersHelper->getParameter('default_timezone'))
         );
+
+        if ($config['unit'] === 'anniversary') {
+            return $triggerDate;
+        }
+
         $interval    = substr($config['interval'], 1); // remove 1st character + or -
         $unit        = strtoupper($config['unit']);
+
 
         switch ($unit) {
             case 'H':
@@ -466,7 +472,6 @@ class FormTabHelper
             case 'S':
             $interval = 'T'.$interval;
         }
-
         $trigger = '';
         $type = '';
         if (strpos($config['unit'], '+') !== false) {
@@ -482,7 +487,6 @@ class FormTabHelper
             $trigger = 'P'.$interval.$unit;
             $type = 'sub';
         }
-
         if ($trigger) {
             $triggerDate->$type(new \DateInterval($trigger)); //subtract the today date with interval
         }
