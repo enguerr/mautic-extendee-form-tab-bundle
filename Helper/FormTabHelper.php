@@ -342,6 +342,10 @@ class FormTabHelper
 
         // Modify operator
         switch ($operatorExpr) {
+            case 'like':
+            case 'notLike':
+                $value = strpos($value, '%') === false ? '%'.$value.'%' : $value;
+                break;
             case 'startsWith':
                 $operatorExpr    = 'like';
                 $value           = $value.'%';
@@ -353,10 +357,6 @@ class FormTabHelper
             case 'contains':
                 $operatorExpr   = 'like';
                 $value          = '%'.$value.'%';
-                break;
-            case 'like':
-            case 'notLike':
-                $value = strpos($value, '%') === false ? '%'.$value.'%' : $value;
                 break;
         }
 
