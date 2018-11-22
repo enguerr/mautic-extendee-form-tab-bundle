@@ -103,7 +103,6 @@ class CampaignFormDateConditionSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $expr = '';
         if ($config['unit'] == 'anniversary') {
             $expr = 'anniversary';
         }else{

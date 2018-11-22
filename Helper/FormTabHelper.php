@@ -460,8 +460,10 @@ class FormTabHelper
 
         if ($config['unit'] === 'anniversary') {
             return $triggerDate;
+        }elseif(strpos($config['interval'], '-') === false && strpos($config['interval'], '+') === false && strpos($config['unit'], '-') === false && strpos($config['unit'], '+') === false)
+        {
+            $config['interval'] = '+'.$config['interval'];
         }
-
         $interval    = substr($config['interval'], 1); // remove 1st character + or -
         $unit        = strtoupper($config['unit']);
 
@@ -474,6 +476,7 @@ class FormTabHelper
         }
         $trigger = '';
         $type = '';
+
         if (strpos($config['unit'], '+') !== false) {
             $trigger = substr($config['unit'], 1);
             $type = 'add';
