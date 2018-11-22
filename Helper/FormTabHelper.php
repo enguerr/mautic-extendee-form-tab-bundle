@@ -470,7 +470,7 @@ class FormTabHelper
 
         switch ($unit) {
             case 'H':
-            case 'M':
+            case 'I':
             case 'S':
             $interval = 'T'.$interval;
         }
