@@ -345,7 +345,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $config = $event->getEvent()->getProperties();
         $formId = $config['form'];
         $emailId = (int) $config['email'];
-        $email   = $this->emailModel->getEntity($emailId);
+        $emailEntity   = $this->emailModel->getEntity($emailId);
+        $email = clone $emailEntity;
 
         if (!$email || !$email->isPublished()) {
             $event->failAll('Email not found or published');
