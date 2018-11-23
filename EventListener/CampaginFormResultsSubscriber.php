@@ -345,8 +345,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $config = $event->getEvent()->getProperties();
         $formId = $config['form'];
         $emailId = (int) $config['email'];
-        $emailEntity   = $this->emailModel->getEntity($emailId);
-        $email = clone $emailEntity;
+        $email   = $this->emailModel->getEntity($emailId);
 
         if (!$email || !$email->isPublished()) {
             $event->failAll('Email not found or published');
@@ -434,13 +433,15 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                     $reason[] = $result;
                 }
             }
-
             if (!empty($reason)) {
                 $event->fail($pending->get($logId), implode('<br />', $reason));
             } else {
                 $event->pass($pending->get($logId));
             }
         }
+
+        $email->setCustomHtml($emailContent );
+
     }
 
     /**
