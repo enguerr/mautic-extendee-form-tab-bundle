@@ -20,12 +20,6 @@ use Mautic\CampaignBundle\Event\PendingEvent;
 use Mautic\CampaignBundle\Model\EventModel;
 use Mautic\ChannelBundle\Model\MessageQueueModel;
 use Mautic\CoreBundle\Model\FormModel;
-use Mautic\EmailBundle\EmailEvents;
-use Mautic\EmailBundle\Entity\Email;
-use Mautic\EmailBundle\Event\EmailOpenEvent;
-use Mautic\EmailBundle\Event\EmailReplyEvent;
-use Mautic\EmailBundle\Exception\EmailCouldNotBeSentException;
-use Mautic\EmailBundle\Helper\UrlMatcher;
 use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\EmailBundle\Model\SendEmailToUser;
 use Mautic\FormBundle\Entity\Submission;
@@ -39,7 +33,6 @@ use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\ModifyFormResultType;
 use MauticPlugin\MauticExtendeeFormTabBundle\FormTabEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission;
-use MauticPlugin\MauticRecombeeBundle\RecombeeEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Translation\TranslatorInterface;
@@ -159,7 +152,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     public static function getSubscribedEvents()
     {
         return [
-            CampaignEvents::CAMPAIGN_ON_BUILD       => ['onCampaignBuild', 0],
+            CampaignEvents::CAMPAIGN_ON_BUILD       => ['onCampaignBuild', -1],
             FormTabEvents::ON_CAMPAIGN_BATCH_ACTION => [
                 ['onCampaignTriggerActionSendEmailToContact', 1],
                 ['onCampaignTriggerActionModifyFormResults', 0],
@@ -172,6 +165,15 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
      */
     public function onCampaignBuild(CampaignBuilderEvent $event)
     {
+        // add email.send.form.results to email decision restriction
+        $decisions = $event->getDecisions();
+        $allowedDecisions = ['email.open', 'email.click', 'email.reply'];
+        foreach ($decisions as $key=>$decision) {
+            if (in_array($key, $allowedDecisions)) {
+                $event->addConnectionRestriction('decisions', $key, 'action', 'email.send.form.results');
+            }
+        }
+
         $event->addAction(
             'email.send.form.results',
             [
