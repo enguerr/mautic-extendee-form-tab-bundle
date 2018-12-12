@@ -169,7 +169,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $decisions = $event->getDecisions();
         $allowedDecisions = ['email.open', 'email.click', 'email.reply'];
         foreach ($decisions as $key=>$decision) {
-            if (in_array($key, $allowedDecisions)) {
+            if (in_array($key, $allowedDecisions) and method_exists($event, 'addConnectionRestriction')) {
                 $event->addConnectionRestriction('decisions', $key, 'action', 'email.send.form.results');
             }
         }
