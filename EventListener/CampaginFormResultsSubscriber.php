@@ -20,6 +20,8 @@ use Mautic\CampaignBundle\Event\PendingEvent;
 use Mautic\CampaignBundle\Model\EventModel;
 use Mautic\ChannelBundle\Model\MessageQueueModel;
 use Mautic\CoreBundle\Model\FormModel;
+use Mautic\EmailBundle\EmailEvents;
+use Mautic\EmailBundle\Event\EmailOpenEvent;
 use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\EmailBundle\Model\SendEmailToUser;
 use Mautic\FormBundle\Entity\Submission;
@@ -44,6 +46,7 @@ use Symfony\Component\Translation\TranslatorInterface;
 class CampaginFormResultsSubscriber implements EventSubscriberInterface
 {
     CONST ALLOWED_FORM_TAB_CONDITIONS =  ['form.tab.date.condition', 'form.field_value'];
+    CONST ALLOWED_FORM_TAB_DECISIONS =  ['email.open', 'email.click', 'email.reply'];
     /**
      * @var LeadModel
      */
@@ -157,7 +160,43 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 ['onCampaignTriggerActionSendEmailToContact', 1],
                 ['onCampaignTriggerActionModifyFormResults', 0],
             ],
+            EmailEvents::ON_CAMPAIGN_TRIGGER_DECISION => ['onCampaignTriggerDecision', -1],
+            EmailEvents::EMAIL_ON_OPEN              => ['onEmailOpen', 1],
         ];
+    }
+
+    /**
+     * Trigger campaign event for opening of an email.
+     *
+     * @param EmailOpenEvent $event
+     */
+    public function onEmailOpen(EmailOpenEvent $event)
+    {
+        $email = $event->getEmail();
+        if ($email !== null) {
+            $this->campaignEventModel->triggerEvent('email.open', $event, 'email', $email->getId());
+        }
+    }
+
+    /**
+     * @param CampaignExecutionEvent $event
+     */
+    public function onCampaignTriggerDecision(CampaignExecutionEvent $event)
+    {
+        /** @var Email $eventDetails */
+        $eventDetails = $event->getEventDetails();
+        /** @var EmailOpenEvent $emailOpenEvent */
+        $emailOpenEvent = $eventDetails;
+        $eventParent  = $event->getEvent()['parent'];
+        if ($event->checkContext('email.open') && !empty($eventParent) && $eventParent['type'] === 'email.send.form.results') {
+            if (method_exists($emailOpenEvent, 'getStat')) {
+                $event->setChannel('form.result', $emailOpenEvent->getStat()->getId());
+                $event->getLogEntry()->setChannel('form.result');
+                $event->getLogEntry()->setChannelId($emailOpenEvent->getStat()->getSourceId());
+                $event->getLogEntry()->setMetadata(['submissionId'=>$emailOpenEvent->getStat()->getId()]);
+                return $event->setResult($eventDetails->getEmail()->getId() === (int) $eventParent['properties']['email']);
+            }
+        }
     }
 
     /**
@@ -167,7 +206,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     {
         // add email.send.form.results to email decision restriction
         $decisions = $event->getDecisions();
-        $allowedDecisions = ['email.open', 'email.click', 'email.reply'];
+        $allowedDecisions = self::ALLOWED_FORM_TAB_DECISIONS;
         foreach ($decisions as $key=>$decision) {
             if (in_array($key, $allowedDecisions) and method_exists($event, 'addConnectionRestriction')) {
                 $event->addConnectionRestriction('decisions', $key, 'action', 'email.send.form.results');
@@ -230,10 +269,13 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     {
         $eventParent = $event->getParent();
         $events = [];
-        while(is_object($eventParent) && in_array(
+        while(is_object($eventParent) && (in_array(
                 $eventParent->getType(),
                 self::ALLOWED_FORM_TAB_CONDITIONS
-            ))
+            ) || in_array(
+                    $eventParent->getType(),
+                    self::ALLOWED_FORM_TAB_DECISIONS
+                )))
         {
 
             $events[] = $eventParent;
@@ -268,16 +310,18 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
 
         $event->setChannel('form', $config['form']);
 
-
         /** @var Event $eventParent */
         $eventParents = $this->getEventParents($event->getEvent());
         // Return failed If parent form ID  not equal to modified form reuslts
-        $eventParentsIds = $this->formTabHelper->getRelatedFormIdsFromEvents($eventParents, $config['form']);
-        if (empty($eventParentsIds)) {
-            $event->failAll('Parent form ids are not same like form what you want to modify in form #'.$config['form']);
-            return;
+        if (!$this->formTabHelper->continueAfterDecision($eventParents)) {
+            $eventParentsIds = $this->formTabHelper->getRelatedFormIdsFromEvents($eventParents, $config['form']);
+            if (empty($eventParentsIds)) {
+                $event->failAll(
+                    'Parent form ids are not same like form what you want to modify in form #'.$config['form']
+                );
+                return;
+            }
         }
-
         // Determine if this email is transactional/marketing
         $pending    = $event->getPending();
         $contacts   = $event->getContacts();
@@ -288,6 +332,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
          * @var Lead $contact
          */
         foreach ($contacts as $logId => $contact) {
+
             $formResults = $this->formTabHelper->getFormWithResult($form, $contact->getId(), true);
             if (empty($formResults['results']['count'])) {
                 unset($contactIds[$contact->getId()]);
@@ -416,8 +461,6 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
             }
 
             $resultsIds    = $this->formTabHelper->formResultsFromFromEvents($eventParents, $contact);
-
-
             $reason = [];
             foreach ($formResults['results']['results'] as $results) {
                 // check
@@ -428,6 +471,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 $newEmailContent = str_replace(array_keys($tokens), $tokens, $emailContent);
                 // replace all form field tokens
                 $email->setCustomHtml($newEmailContent);
+                $options['channel'] = ['form.result', $results['id']];
                 $result = $this->emailModel->sendEmail($email, $leadCredentials, $options);
                 if (is_array($result)) {
                     $reason[] = implode('<br />', $result);

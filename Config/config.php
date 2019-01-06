@@ -112,7 +112,8 @@ return [
                     'mautic.lead.model.lead',
                     'doctrine.orm.entity_manager',
                     'mautic.helper.core_parameters',
-                    'request_stack'
+                    'request_stack',
+                    'mautic.email.model.email'
                 ],
             ],
         ],

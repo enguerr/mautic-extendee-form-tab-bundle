@@ -13,10 +13,13 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Helper;
 
 use Doctrine\ORM\EntityManager;
 use Joomla\Http\Http;
+use Mautic\CampaignBundle\Entity\Event;
 use Mautic\CoreBundle\Helper\CoreParametersHelper;
 use Mautic\CoreBundle\Helper\TemplatingHelper;
 use Mautic\CoreBundle\Helper\UserHelper;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
+use Mautic\EmailBundle\Entity\Stat;
+use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\FormBundle\Entity\Field;
 use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Entity\Submission;
@@ -33,6 +36,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
  */
 class FormTabHelper
 {
+    CONST ALLOWED_FORM_TAB_DECISIONS =  ['email.open', 'email.click', 'email.reply'];
 
     /**
      * @var FormModel
@@ -87,6 +91,11 @@ class FormTabHelper
     private $request;
 
     /**
+     * @var EmailModel
+     */
+    private $emailModel;
+
+    /**
      * FormTabHelper constructor.
      *
      * @param TemplatingHelper                     $templatingHelper
@@ -99,6 +108,7 @@ class FormTabHelper
      * @param EntityManager                        $entityManager
      * @param CoreParametersHelper                 $coreParametersHelper
      * @param RequestStack                         $requestStack
+     * @param EmailModel                           $emailModel
      */
     public function __construct(
         TemplatingHelper $templatingHelper,
@@ -110,7 +120,8 @@ class FormTabHelper
         LeadModel $leadModel,
         EntityManager $entityManager,
         CoreParametersHelper $coreParametersHelper,
-        RequestStack $requestStack
+        RequestStack $requestStack,
+        EmailModel $emailModel
     ) {
 
         $this->formModel            = $formModel;
@@ -123,6 +134,7 @@ class FormTabHelper
         $this->entityManager        = $entityManager;
         $this->coreParametersHelper = $coreParametersHelper;
         $this->request              = $requestStack;
+        $this->emailModel = $emailModel;
     }
 
     /**
@@ -395,6 +407,7 @@ class FormTabHelper
         return $results;
     }
 
+
     /**
      * @param array $eventParents
      * @param int $relatedFormId
@@ -506,17 +519,76 @@ class FormTabHelper
     public function formResultsFromFromEvents($eventParents, Lead $lead)
     {
         $submissionIds = [];
-        foreach ($eventParents as $eventParent) {
-            $results = $this->formResultsFromFromEvent($eventParent, $lead);
-            $resultsIds = array_column($results, 'id');
-            if (!empty($submissionIds)) {
-                $resultsIds = array_intersect($submissionIds, $resultsIds);
-            }
-            $submissionIds  = $resultsIds;
+        if ($this->continueAfterDecision($eventParents)) {
+            return $this->submissionIdsFromDecision($eventParents, $lead);
+        }else {
+            foreach ($eventParents as $eventParent) {
+                $results    = $this->formResultsFromFromEvent($eventParent, $lead);
+                $resultsIds = array_column($results, 'id');
+                if (!empty($submissionIds)) {
+                    $resultsIds = array_intersect($submissionIds, $resultsIds);
                 }
+                $submissionIds = $resultsIds;
+            }
+        }
         return $submissionIds;
     }
 
+    /**
+     * @param array $eventParents
+     *
+     * @return bool
+     */
+    public function continueAfterDecision($eventParents)
+    {
+        /** @var Event $eventParent */
+        $eventParent = current($eventParents);
+
+        if (in_array($eventParent->getType(), self::ALLOWED_FORM_TAB_DECISIONS)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array $eventParents
+     *
+     * @param Lead  $lead
+     *
+     * @return bool
+     */
+    public function submissionIdsFromDecision($eventParents, Lead $lead)
+    {
+        /** @var Event $eventParent */
+        $eventParent = current($eventParents);
+        switch ($eventParent->getType()) {
+            case 'email.open':
+                //$eventParent->getLogEn
+                //use DBAL to get entity fields
+                $q = $this->entityManager->getConnection()->createQueryBuilder();
+                $q->select('l.channel, l.channel_id')
+                    ->from(MAUTIC_TABLE_PREFIX.'campaign_lead_event_log', 'l')
+                    ->where(
+                        $q->expr()->andX(
+                            $q->expr()->eq('l.lead_id', ':lead'),
+                            $q->expr()->eq('l.event_id', ':event'),
+                            $q->expr()->eq('l.campaign_id', ':campaign')
+                        )
+                    )
+                    ->setParameter('lead', $lead->getId())
+                    ->setParameter('event', $eventParent->getId())
+                    ->setParameter('campaign', $eventParent->getCampaign()->getId())
+                    ->orderBy('l.id', 'DESC');
+                $lastLog = $q->execute()->fetch();
+                if ($lastLog['channel'] == 'form.result') {
+                    return [$lastLog['channel_id']];
+                }
+                break;
+        }
+        die();
+        return [];
+    }
 
 
     /**
