@@ -586,7 +586,6 @@ class FormTabHelper
                 }
                 break;
         }
-        die();
         return [];
     }
 
