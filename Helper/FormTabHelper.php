@@ -36,7 +36,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
  */
 class FormTabHelper
 {
-    CONST ALLOWED_FORM_TAB_DECISIONS =  ['email.open', 'email.click', 'email.reply'];
+    CONST ALLOWED_FORM_TAB_DECISIONS =  ['email.open'];
 
     /**
      * @var FormModel

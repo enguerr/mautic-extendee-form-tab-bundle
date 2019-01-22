@@ -440,6 +440,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
          * @var Lead $contact
          */
         $emailContent = $email->getCustomHtml();
+        $dynamicContentAsArrays = $email->getDynamicContent();
+        //$email->getDynamicContent();
         foreach ($contacts as $logId => $contact) {
             $leadCredentials = $contact->getProfileFields();
 
@@ -475,6 +477,13 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 }
                 $tokens          = $this->findTokens($emailContent, $results['results']);
                 $newEmailContent = str_replace(array_keys($tokens), $tokens, $emailContent);
+                // replace dynamic content tokens
+                $dynamicContentAsArraysNew = $dynamicContentAsArrays;
+                foreach ($dynamicContentAsArraysNew as &$dynamicContentAsArray) {
+                    $tokens          = $this->findTokens($dynamicContentAsArray['content'], $results['results']);
+                    $dynamicContentAsArray['content'] = str_replace(array_keys($tokens), $tokens, $dynamicContentAsArray['content']);
+                }
+                $email->setDynamicContent($dynamicContentAsArraysNew);
                 // replace all form field tokens
                 $email->setCustomHtml($newEmailContent);
                 $options['channel'] = ['form.result', $results['id']];
