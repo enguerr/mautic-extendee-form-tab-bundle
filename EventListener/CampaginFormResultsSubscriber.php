@@ -19,6 +19,8 @@ use Mautic\CampaignBundle\Event\CampaignExecutionEvent;
 use Mautic\CampaignBundle\Event\PendingEvent;
 use Mautic\CampaignBundle\Model\EventModel;
 use Mautic\ChannelBundle\Model\MessageQueueModel;
+use Mautic\CoreBundle\Helper\DateTimeHelper;
+use Mautic\CoreBundle\Helper\ParamsLoaderHelper;
 use Mautic\CoreBundle\Model\FormModel;
 use Mautic\EmailBundle\EmailEvents;
 use Mautic\EmailBundle\Event\EmailOpenEvent;
@@ -47,6 +49,10 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
 {
     CONST ALLOWED_FORM_TAB_CONDITIONS =  ['form.tab.date.condition', 'form.field_value'];
     CONST ALLOWED_FORM_TAB_DECISIONS =  ['email.open', 'email.click', 'email.reply'];
+
+    /** @var  array */
+    private static $parameters;
+
     /**
      * @var LeadModel
      */
@@ -516,15 +522,77 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                         continue;
                     }
 
-                    if (!empty($results[$match])) {
-                        $tokenList[$token] = $results[$match]['value'];
-                    } else {
-                        $tokenList[$token] = '';
-                    }
+                    $tokenList[$token] = $this->getTokenValue($results, $match);
                 }
             }
         }
 
         return $tokenList;
+    }
+
+    /**
+     * @param array  $fields
+     * @param string $alias
+     * @param string $modifier
+     *
+     * @return mixed|string
+     */
+    private function getTokenValue($results, $alias)
+    {
+        $modifier = '';
+        if (count(explode('|', $alias)) === 2) {
+            list($alias, $modifier) = explode('|', $alias);
+        }
+        $value = '';
+        if (isset($results[$alias])) {
+            $value = $results[$alias]['value'];
+        }
+
+        switch ($modifier) {
+            case 'true':
+                $value = urlencode($value);
+                break;
+            case 'datetime':
+            case 'date':
+            case 'time':
+            $dt   = new DateTimeHelper($value);
+            $date = $dt->getDateTime()->format(
+                self::getParameter('date_format_dateonly')
+            );
+            $time = $dt->getDateTime()->format(
+                self::getParameter('date_format_timeonly')
+            );
+            switch ($modifier) {
+                case 'datetime':
+                    $value = $date.' '.$time;
+                    break;
+                case 'date':
+                    $value = $date;
+                    break;
+                case 'time':
+                    $value = $time;
+                    break;
+            }
+                break;
+        }
+        if (in_array($modifier, ['true', 'date', 'time', 'datetime'])) {
+            return $value;
+        } else {
+            return $value ?: $modifier;
+        }
+    }
+
+    /**
+     * @param string $parameter
+     *
+     * @return mixed
+     */
+    private static function getParameter($parameter)
+    {
+        if (null === self::$parameters) {
+            self::$parameters = (new ParamsLoaderHelper())->getParameters();
+        }
+
+        return self::$parameters[$parameter];
     }
 }
