@@ -475,13 +475,16 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 if (!in_array($results['id'], $resultsIds)) {
                     continue;
                 }
-                $tokens          = $this->findTokens($emailContent, $results['results']);
-                $newEmailContent = str_replace(array_keys($tokens), $tokens, $emailContent);
+                $newEmailContent = $this->replaceTokensFromContent($emailContent, $results['results']);
                 // replace dynamic content tokens
                 $dynamicContentAsArraysNew = $dynamicContentAsArrays;
                 foreach ($dynamicContentAsArraysNew as &$dynamicContentAsArray) {
-                    $tokens          = $this->findTokens($dynamicContentAsArray['content'], $results['results']);
-                    $dynamicContentAsArray['content'] = str_replace(array_keys($tokens), $tokens, $dynamicContentAsArray['content']);
+                    $dynamicContentAsArray['content'] = $this->replaceTokensFromContent($dynamicContentAsArray['content'], $results['results']);
+                    if (!empty($dynamicContentAsArray['filters'])) {
+                        foreach ($dynamicContentAsArray['filters'] as &$dynamicContentFilter) {
+                            $dynamicContentFilter['content'] = $this->replaceTokensFromContent($dynamicContentFilter['content'], $results['results']);
+                        }
+                    }
                 }
                 $email->setDynamicContent($dynamicContentAsArraysNew);
                 // replace all form field tokens
@@ -505,13 +508,26 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
 
     }
 
+
+    /**
+     * @param $content
+     * @param $results
+     *
+     * @return string
+     */
+    public function replaceTokensFromContent($content, $results)
+    {
+        $tokens          = $this->findTokens($content, $results);
+        return str_replace(array_keys($tokens), $tokens, $content);
+    }
+
     /**
      * @param array $content
      * @param array $results
      *
      * @return array
      */
-    public function findTokens($content, $results)
+    private function findTokens($content, $results)
     {
 
         // Search for bracket or bracket encoded
