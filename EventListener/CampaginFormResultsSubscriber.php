@@ -13,7 +13,6 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\EventListener;
 
 use Mautic\CampaignBundle\CampaignEvents;
 use Mautic\CampaignBundle\Entity\Event;
-use Mautic\CampaignBundle\Entity\LeadEventLog;
 use Mautic\CampaignBundle\Event\CampaignBuilderEvent;
 use Mautic\CampaignBundle\Event\CampaignExecutionEvent;
 use Mautic\CampaignBundle\Event\PendingEvent;
@@ -31,7 +30,6 @@ use Mautic\FormBundle\Model\FieldModel;
 use Mautic\FormBundle\Model\SubmissionModel;
 use Mautic\LeadBundle\Entity\Lead;
 use Mautic\LeadBundle\Model\LeadModel;
-use Mautic\PageBundle\Entity\Hit;
 use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\EmailSendResultType;
 use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\ModifyFormResultType;
 use MauticPlugin\MauticExtendeeFormTabBundle\FormTabEvents;
@@ -48,7 +46,7 @@ use Symfony\Component\Translation\TranslatorInterface;
 class CampaginFormResultsSubscriber implements EventSubscriberInterface
 {
     CONST ALLOWED_FORM_TAB_CONDITIONS =  ['form.tab.date.condition', 'form.field_value'];
-    CONST ALLOWED_FORM_TAB_DECISIONS =  ['email.open', 'email.click', 'email.reply'];
+    CONST ALLOWED_FORM_TAB_DECISIONS =  ['email.open'];
 
     /** @var  array */
     private static $parameters;
@@ -179,7 +177,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     public function onEmailOpen(EmailOpenEvent $event)
     {
         $email = $event->getEmail();
-        if ($email !== null) {
+        if ($email !== null && $event->getStat()->getSource() === 'form.result') {
             $this->campaignEventModel->triggerEvent('email.open', $event, 'email', $email->getId());
         }
     }
@@ -210,15 +208,6 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
      */
     public function onCampaignBuild(CampaignBuilderEvent $event)
     {
-        // add email.send.form.results to email decision restriction
-        $decisions = $event->getDecisions();
-        $allowedDecisions = self::ALLOWED_FORM_TAB_DECISIONS;
-        foreach ($decisions as $key=>$decision) {
-            if (in_array($key, $allowedDecisions) and method_exists($event, 'addConnectionRestriction')) {
-                $event->addConnectionRestriction('decisions', $key, 'action', 'email.send.form.results');
-            }
-        }
-
         $event->addAction(
             'email.send.form.results',
             [
@@ -230,6 +219,9 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 'channel'                => 'email',
                 'channelIdField'         => 'email',
                 'connectionRestrictions' => [
+                    'target' => [
+                        'decision' => self::ALLOWED_FORM_TAB_DECISIONS,
+                    ],
                     'anchor' => [
                         'condition.inaction',
                     ],
