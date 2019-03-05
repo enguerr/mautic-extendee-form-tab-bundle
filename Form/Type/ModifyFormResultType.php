@@ -107,7 +107,7 @@ class ModifyFormResultType extends AbstractType
                         }
                     }
                 }
-                $content = $this->formTabHelper->getFormContentFromId($data['form'], true, 'name="campaignevent[properties][content]');
+                $content = $this->formTabHelper->getFormContentFromId($data['form'], true, 'name="campaignevent[properties][content]', true);
             }
 
             $form->add(

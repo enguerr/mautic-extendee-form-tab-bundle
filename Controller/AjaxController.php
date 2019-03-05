@@ -39,7 +39,7 @@ class AjaxController extends CommonAjaxController
         $form = $formModel->getEntity($formId);
         $dataArray['success'] = 0;
         if($formId && $form instanceof Form) {
-            $dataArray['content'] = $formTabHelper->getFormContent($form, false, 'name="campaignevent[properties][content]');
+            $dataArray['content'] = $formTabHelper->getFormContent($form, false, 'name="campaignevent[properties][content]', true);
         }
 
         return $this->sendJsonResponse($dataArray);
