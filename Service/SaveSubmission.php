@@ -211,6 +211,10 @@ class SaveSubmission
                 }
                 continue;
             } elseif ($f->isFileType()) {
+                if (null === $request) {
+                    continue;
+                }
+
                 try {
                     $file  = $this->fieldValidator->processFileValidation($f, $request);
                     $value = $file->getClientOriginalName();

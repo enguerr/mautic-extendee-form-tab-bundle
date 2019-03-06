@@ -140,26 +140,26 @@ class FormTabHelper
     /**
      * @param null $formId
      * @param bool $populate
-     *
      * @param null $replaceAttrName
+     * @param bool $removeFileUploadFields
      *
      * @return string
      */
-    public function getFormContentFromId($formId, $populate = false, $replaceAttrName = null)
+    public function getFormContentFromId($formId, $populate = false, $replaceAttrName = null, $removeFileUploadFields = false)
     {
-        return $this->getFormContent($this->formModel->getEntity($formId), $populate, $replaceAttrName);
+        return $this->getFormContent($this->formModel->getEntity($formId), $populate, $replaceAttrName, $removeFileUploadFields);
 
     }
 
     /**
      * @param Form $form
      * @param bool $populate
-     *
      * @param null $replaceAttrName
+     * @param bool $removeFileUploadFields
      *
      * @return mixed|string
      */
-    public function getFormContent(Form $form, $populate = false, $replaceAttrName = null)
+    public function getFormContent(Form $form, $populate = false, $replaceAttrName = null, $removeFileUploadFields = false)
     {
         $formId = $form->getId();
         $html   = $this->formModel->getContent($form, false, false);
@@ -176,6 +176,10 @@ class FormTabHelper
         $html = preg_replace('/<form(.*)>/', '', $html, 1);
         $html = preg_replace('/<button type="submit"(.*)<\/button>/', '', $html, 1);
         $html = str_replace('</form>', '', $html);
+
+        if ($removeFileUploadFields) {
+            $html = preg_replace('/<div(?:(?!(<div|<\/div>)).)*?type="file".*?<\/div>/s', '', $html);
+        }
 
         return $html;
     }
