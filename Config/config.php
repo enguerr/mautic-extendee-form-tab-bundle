@@ -52,6 +52,7 @@ return [
                     'mautic.extendee.form.tab.helper',
                     'mautic.extendee.form.tab.service.save_submission',
                     'request_stack',
+                    'router',
                 ],
             ],
             'mautic.extendee.form.tab.campaign.date.value.subscriber' => [
