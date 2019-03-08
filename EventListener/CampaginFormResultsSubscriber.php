@@ -35,6 +35,7 @@ use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\ModifyFormResultType;
 use MauticPlugin\MauticExtendeeFormTabBundle\FormTabEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission;
+use Symfony\Bundle\FrameworkBundle\Routing\Router;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Translation\TranslatorInterface;
@@ -112,6 +113,11 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     private $requestStack;
 
     /**
+     * @var Router
+     */
+    private $router;
+
+    /**
      * @param LeadModel           $leadModel
      * @param EmailModel          $emailModel
      * @param EventModel          $eventModel
@@ -124,6 +130,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
      * @param FormTabHelper       $formTabHelper
      * @param SaveSubmission      $saveSubmission
      * @param RequestStack        $requestStack
+     * @param Router              $router
      */
     public function __construct(
         LeadModel $leadModel,
@@ -137,7 +144,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         SubmissionModel $submissionModel,
         FormTabHelper $formTabHelper,
         SaveSubmission $saveSubmission,
-        RequestStack $requestStack
+        RequestStack $requestStack,
+        Router $router
     ) {
         $this->leadModel          = $leadModel;
         $this->emailModel         = $emailModel;
@@ -151,6 +159,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $this->formTabHelper      = $formTabHelper;
         $this->saveSubmission     = $saveSubmission;
         $this->requestStack       = $requestStack;
+        $this->router             = $router;
     }
 
     /**
@@ -467,14 +476,14 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 if (!in_array($results['id'], $resultsIds)) {
                     continue;
                 }
-                $newEmailContent = $this->replaceTokensFromContent($emailContent, $results['results']);
+                $newEmailContent = $this->replaceTokensFromContent($emailContent, $results);
                 // replace dynamic content tokens
                 $dynamicContentAsArraysNew = $dynamicContentAsArrays;
                 foreach ($dynamicContentAsArraysNew as &$dynamicContentAsArray) {
-                    $dynamicContentAsArray['content'] = $this->replaceTokensFromContent($dynamicContentAsArray['content'], $results['results']);
+                    $dynamicContentAsArray['content'] = $this->replaceTokensFromContent($dynamicContentAsArray['content'], $results);
                     if (!empty($dynamicContentAsArray['filters'])) {
                         foreach ($dynamicContentAsArray['filters'] as &$dynamicContentFilter) {
-                            $dynamicContentFilter['content'] = $this->replaceTokensFromContent($dynamicContentFilter['content'], $results['results']);
+                            $dynamicContentFilter['content'] = $this->replaceTokensFromContent($dynamicContentFilter['content'], $results);
                         }
                     }
                 }
@@ -548,11 +557,9 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     }
 
     /**
-     * @param array  $fields
-     * @param string $alias
-     * @param string $modifier
-     *
-     * @return mixed|string
+     * @param $results
+     * @param $alias
+     * @return string
      */
     private function getTokenValue($results, $alias)
     {
@@ -561,8 +568,20 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
             list($alias, $modifier) = explode('|', $alias);
         }
         $value = '';
-        if (isset($results[$alias])) {
-            $value = $results[$alias]['value'];
+        $formResults = $results['results'];
+        if (isset($formResults[$alias])) {
+            if ('file' === $formResults[$alias]['type'] && !empty($formResults[$alias]['value'])) {
+                $value = $this->router->generate(
+                    'mautic_form_file_download',
+                    [
+                        'submissionId' => $results['id'],
+                        'field'        => $alias,
+                    ],
+                    true
+                );
+            } else {
+                $value = $formResults[$alias]['value'];
+            }
         }
 
         switch ($modifier) {
