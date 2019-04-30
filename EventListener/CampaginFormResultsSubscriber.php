@@ -476,7 +476,9 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 if (!in_array($results['id'], $resultsIds)) {
                     continue;
                 }
-                $newEmailContent = $this->replaceTokensFromContent($emailContent, $results);
+                $options['tokens'] = $this->findTokens($emailContent, $results);
+               /* $newEmailContent = $this->replaceTokensFromContent($emailContent, $results);
+
                 // replace dynamic content tokens
                 $dynamicContentAsArraysNew = $dynamicContentAsArrays;
                 foreach ($dynamicContentAsArraysNew as &$dynamicContentAsArray) {
@@ -489,7 +491,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 }
                 $email->setDynamicContent($dynamicContentAsArraysNew);
                 // replace all form field tokens
-                $email->setCustomHtml($newEmailContent);
+                $email->setCustomHtml($newEmailContent);*/
+
                 $options['channel'] = ['form.result', $results['id']];
                 $result = $this->emailModel->sendEmail($email, $leadCredentials, $options);
                 if (is_array($result)) {
