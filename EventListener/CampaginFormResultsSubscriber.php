@@ -23,6 +23,7 @@ use Mautic\CoreBundle\Helper\ParamsLoaderHelper;
 use Mautic\CoreBundle\Model\FormModel;
 use Mautic\EmailBundle\EmailEvents;
 use Mautic\EmailBundle\Event\EmailOpenEvent;
+use Mautic\EmailBundle\Event\EmailSendEvent;
 use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\EmailBundle\Model\SendEmailToUser;
 use Mautic\FormBundle\Entity\Submission;
@@ -35,6 +36,7 @@ use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\ModifyFormResultType;
 use MauticPlugin\MauticExtendeeFormTabBundle\FormTabEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission;
+use phpDocumentor\Reflection\Types\Self_;
 use Symfony\Bundle\FrameworkBundle\Routing\Router;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -46,8 +48,9 @@ use Symfony\Component\Translation\TranslatorInterface;
  */
 class CampaginFormResultsSubscriber implements EventSubscriberInterface
 {
-    CONST ALLOWED_FORM_TAB_CONDITIONS =  ['form.tab.date.condition', 'form.field_value'];
-    CONST ALLOWED_FORM_TAB_DECISIONS =  ['email.open'];
+    CONST ALLOWED_FORM_TAB_CONDITIONS = ['form.tab.date.condition', 'form.field_value'];
+
+    CONST ALLOWED_FORM_TAB_DECISIONS  = ['email.open'];
 
     /** @var  array */
     private static $parameters;
@@ -168,13 +171,13 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     public static function getSubscribedEvents()
     {
         return [
-            CampaignEvents::CAMPAIGN_ON_BUILD       => ['onCampaignBuild', -1],
-            FormTabEvents::ON_CAMPAIGN_BATCH_ACTION => [
+            CampaignEvents::CAMPAIGN_ON_BUILD         => ['onCampaignBuild', -1],
+            FormTabEvents::ON_CAMPAIGN_BATCH_ACTION   => [
                 ['onCampaignTriggerActionSendEmailToContact', 1],
                 ['onCampaignTriggerActionModifyFormResults', 0],
             ],
             EmailEvents::ON_CAMPAIGN_TRIGGER_DECISION => ['onCampaignTriggerDecision', -1],
-            EmailEvents::EMAIL_ON_OPEN              => ['onEmailOpen', 1],
+            EmailEvents::EMAIL_ON_OPEN                => ['onEmailOpen', 1],
         ];
     }
 
@@ -200,14 +203,19 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $eventDetails = $event->getEventDetails();
         /** @var EmailOpenEvent $emailOpenEvent */
         $emailOpenEvent = $eventDetails;
-        $eventParent  = $event->getEvent()['parent'];
-        if ($event->checkContext('email.open') && !empty($eventParent) && $eventParent['type'] === 'email.send.form.results') {
+        $eventParent    = $event->getEvent()['parent'];
+        if ($event->checkContext(
+                'email.open'
+            ) && !empty($eventParent) && $eventParent['type'] === 'email.send.form.results') {
             if (method_exists($emailOpenEvent, 'getStat')) {
                 $event->setChannel('form.result', $emailOpenEvent->getStat()->getId());
                 $event->getLogEntry()->setChannel('form.result');
                 $event->getLogEntry()->setChannelId($emailOpenEvent->getStat()->getSourceId());
-                $event->getLogEntry()->setMetadata(['submissionId'=>$emailOpenEvent->getStat()->getId()]);
-                return $event->setResult($eventDetails->getEmail()->getId() === (int) $eventParent['properties']['email']);
+                $event->getLogEntry()->setMetadata(['submissionId' => $emailOpenEvent->getStat()->getId()]);
+
+                return $event->setResult(
+                    $eventDetails->getEmail()->getId() === (int) $eventParent['properties']['email']
+                );
             }
         }
     }
@@ -247,11 +255,11 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $event->addAction(
             'modify.form.result',
             [
-                'label'          => 'mautic.extendee.form.tab.campaign.event.modify.results',
-                'description'    => 'mautic.extendee.form.tab.campaign.event.modify.results.desc',
-                'batchEventName' => FormTabEvents::ON_CAMPAIGN_BATCH_ACTION,
-                'formType'       => ModifyFormResultType::class,
-                'formTheme'      => 'MauticExtendeeFormTabBundle:FormTheme\ModifyFormResultType',
+                'label'                  => 'mautic.extendee.form.tab.campaign.event.modify.results',
+                'description'            => 'mautic.extendee.form.tab.campaign.event.modify.results.desc',
+                'batchEventName'         => FormTabEvents::ON_CAMPAIGN_BATCH_ACTION,
+                'formType'               => ModifyFormResultType::class,
+                'formTheme'              => 'MauticExtendeeFormTabBundle:FormTheme\ModifyFormResultType',
                 'connectionRestrictions' => [
                     'anchor' => [
                         'condition.inaction',
@@ -275,23 +283,23 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     private function getEventParents(\Mautic\CampaignBundle\Entity\Event $event)
     {
         $eventParent = $event->getParent();
-        $events = [];
-        while(is_object($eventParent) && (in_array(
-                $eventParent->getType(),
-                self::ALLOWED_FORM_TAB_CONDITIONS
-            ) || in_array(
+        $events      = [];
+        while (is_object($eventParent) && (in_array(
+                    $eventParent->getType(),
+                    self::ALLOWED_FORM_TAB_CONDITIONS
+                ) || in_array(
                     $eventParent->getType(),
                     self::ALLOWED_FORM_TAB_DECISIONS
-                )))
-        {
+                ))) {
 
-            $events[] = $eventParent;
+            $events[]    = $eventParent;
             $eventParent = $eventParent->getParent();
             if (!$eventParent) {
                 break;
             }
         }
-         return $events;
+
+        return $events;
     }
 
     /**
@@ -326,6 +334,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 $event->failAll(
                     'Parent form ids are not same like form what you want to modify in form #'.$config['form']
                 );
+
                 return;
             }
         }
@@ -346,7 +355,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 $event->fail($pending->get($logId), 'No form results for contact #'.$contact->getId());
                 continue;
             }
-            $resultsIds    = $this->formTabHelper->formResultsFromFromEvents($eventParents, $contact);
+            $resultsIds = $this->formTabHelper->formResultsFromFromEvents($eventParents, $contact);
             $errors     = [];
             foreach ($formResults['results']['results'] as $results) {
                 if (!in_array($results['id'], $resultsIds)) {
@@ -396,8 +405,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $config = $event->getEvent()->getProperties();
-        $formId = $config['form'];
+        $config  = $event->getEvent()->getProperties();
+        $formId  = $config['form'];
         $emailId = (int) $config['email'];
         $email   = $this->emailModel->getEntity($emailId);
 
@@ -413,6 +422,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $eventParentsIds = $this->formTabHelper->getRelatedFormIdsFromEvents($eventParents, $config['form']);
         if (empty($eventParentsIds)) {
             $event->failAll('Parent form ids are not same like form what you want to modify in form #'.$config['form']);
+
             return;
         }
 
@@ -440,8 +450,12 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
          * @var int
          * @var Lead $contact
          */
-        $emailContent = $email->getCustomHtml();
+        $emailContent           = $email->getCustomHtml();
         $dynamicContentAsArrays = $email->getDynamicContent();
+        $emailContentAll = $emailContent.''.implode('', array_column($dynamicContentAsArrays, 'content'));
+        foreach ($email->getTranslations(true) as $translation) {
+            $emailContentAll .= $translation->getCustomHtml();
+        }
         //$email->getDynamicContent();
         foreach ($contacts as $logId => $contact) {
             $leadCredentials = $contact->getProfileFields();
@@ -469,32 +483,41 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                 continue;
             }
 
-            $resultsIds    = $this->formTabHelper->formResultsFromFromEvents($eventParents, $contact);
-            $reason = [];
+            $resultsIds = $this->formTabHelper->formResultsFromFromEvents($eventParents, $contact);
+            $reason     = [];
             foreach ($formResults['results']['results'] as $results) {
                 // check
                 if (!in_array($results['id'], $resultsIds)) {
                     continue;
                 }
-                $options['tokens'] = $this->findTokens($emailContent, $results);
-               /* $newEmailContent = $this->replaceTokensFromContent($emailContent, $results);
+                $options['tokens'] = $this->findTokens($emailContentAll, $results);
+                // $newEmailContent = $this->replaceTokensFromContent($emailContent, $results);
+
+                $newEmailContent = $emailContent;
 
                 // replace dynamic content tokens
                 $dynamicContentAsArraysNew = $dynamicContentAsArrays;
                 foreach ($dynamicContentAsArraysNew as &$dynamicContentAsArray) {
-                    $dynamicContentAsArray['content'] = $this->replaceTokensFromContent($dynamicContentAsArray['content'], $results);
+                    $dynamicContentAsArray['content'] = $this->replaceTokensFromContent(
+                        $dynamicContentAsArray['content'],
+                        $results
+                    );
                     if (!empty($dynamicContentAsArray['filters'])) {
                         foreach ($dynamicContentAsArray['filters'] as &$dynamicContentFilter) {
-                            $dynamicContentFilter['content'] = $this->replaceTokensFromContent($dynamicContentFilter['content'], $results);
+                            $dynamicContentFilter['content'] = $this->replaceTokensFromContent(
+                                $dynamicContentFilter['content'],
+                                $results
+                            );
                         }
                     }
                 }
+
                 $email->setDynamicContent($dynamicContentAsArraysNew);
                 // replace all form field tokens
-                $email->setCustomHtml($newEmailContent);*/
+                $email->setCustomHtml($newEmailContent);
 
                 $options['channel'] = ['form.result', $results['id']];
-                $result = $this->emailModel->sendEmail($email, $leadCredentials, $options);
+                $result             = $this->emailModel->sendEmail($email, $leadCredentials, $options);
                 if (is_array($result)) {
                     $reason[] = implode('<br />', $result);
                 } elseif (true !== $result) {
@@ -508,7 +531,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
             }
         }
 
-        $email->setCustomHtml($emailContent );
+        $email->setCustomHtml($emailContent);
 
     }
 
@@ -521,7 +544,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
      */
     public function replaceTokensFromContent($content, $results)
     {
-        $tokens          = $this->findTokens($content, $results);
+        $tokens = $this->findTokens($content, $results);
+
         return str_replace(array_keys($tokens), $tokens, $content);
     }
 
@@ -562,6 +586,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
     /**
      * @param $results
      * @param $alias
+     *
      * @return string
      */
     private function getTokenValue($results, $alias)
@@ -570,7 +595,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         if (count(explode('|', $alias)) === 2) {
             list($alias, $modifier) = explode('|', $alias);
         }
-        $value = '';
+        $value       = '';
         $formResults = $results['results'];
         if (isset($formResults[$alias])) {
             if ('file' === $formResults[$alias]['type'] && !empty($formResults[$alias]['value'])) {
@@ -594,24 +619,24 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
             case 'datetime':
             case 'date':
             case 'time':
-            $dt   = new DateTimeHelper($value);
-            $date = $dt->getDateTime()->format(
-                self::getParameter('date_format_dateonly')
-            );
-            $time = $dt->getDateTime()->format(
-                self::getParameter('date_format_timeonly')
-            );
-            switch ($modifier) {
-                case 'datetime':
-                    $value = $date.' '.$time;
-                    break;
-                case 'date':
-                    $value = $date;
-                    break;
-                case 'time':
-                    $value = $time;
-                    break;
-            }
+                $dt   = new DateTimeHelper($value);
+                $date = $dt->getDateTime()->format(
+                    self::getParameter('date_format_dateonly')
+                );
+                $time = $dt->getDateTime()->format(
+                    self::getParameter('date_format_timeonly')
+                );
+                switch ($modifier) {
+                    case 'datetime':
+                        $value = $date.' '.$time;
+                        break;
+                    case 'date':
+                        $value = $date;
+                        break;
+                    case 'time':
+                        $value = $time;
+                        break;
+                }
                 break;
         }
         if (in_array($modifier, ['true', 'date', 'time', 'datetime'])) {
