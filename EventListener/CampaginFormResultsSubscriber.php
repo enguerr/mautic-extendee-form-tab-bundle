@@ -23,7 +23,6 @@ use Mautic\CoreBundle\Helper\ParamsLoaderHelper;
 use Mautic\CoreBundle\Model\FormModel;
 use Mautic\EmailBundle\EmailEvents;
 use Mautic\EmailBundle\Event\EmailOpenEvent;
-use Mautic\EmailBundle\Event\EmailSendEvent;
 use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\EmailBundle\Model\SendEmailToUser;
 use Mautic\FormBundle\Entity\Submission;
@@ -36,7 +35,6 @@ use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\ModifyFormResultType;
 use MauticPlugin\MauticExtendeeFormTabBundle\FormTabEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Service\SaveSubmission;
-use phpDocumentor\Reflection\Types\Self_;
 use Symfony\Bundle\FrameworkBundle\Routing\Router;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -491,9 +489,9 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                     continue;
                 }
                 $options['tokens'] = $this->findTokens($emailContentAll, $results);
-                // $newEmailContent = $this->replaceTokensFromContent($emailContent, $results);
+                 $newEmailContent = $this->replaceTokensFromContent($emailContent, $results);
 
-                $newEmailContent = $emailContent;
+              //  $newEmailContent = $emailContent;
 
                 // replace dynamic content tokens
                 $dynamicContentAsArraysNew = $dynamicContentAsArrays;
@@ -569,6 +567,9 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
             $foundMatches = preg_match_all($regex, $content, $matches);
             if ($foundMatches) {
                 foreach ($matches[2] as $key => $match) {
+                    if (false !== strpos($match, '%7C')) {
+                        $match = urldecode($match);
+                    }
                     $token = $matches[0][$key];
 
                     if (isset($tokenList[$token])) {
