@@ -22,6 +22,7 @@ use Mautic\CoreBundle\Helper\DateTimeHelper;
 use Mautic\CoreBundle\Helper\ParamsLoaderHelper;
 use Mautic\CoreBundle\Model\FormModel;
 use Mautic\EmailBundle\EmailEvents;
+use Mautic\EmailBundle\Entity\Email;
 use Mautic\EmailBundle\Event\EmailOpenEvent;
 use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\EmailBundle\Model\SendEmailToUser;
@@ -451,9 +452,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         $emailContent           = $email->getCustomHtml();
         $dynamicContentAsArrays = $email->getDynamicContent();
         $emailContentAll = $emailContent.''.implode('', array_column($dynamicContentAsArrays, 'content'));
-        foreach ($email->getTranslations(true) as $translation) {
-            $emailContentAll .= $translation->getCustomHtml();
-        }
+
         //$email->getDynamicContent();
         foreach ($contacts as $logId => $contact) {
             $leadCredentials = $contact->getProfileFields();
@@ -489,12 +488,11 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                     continue;
                 }
                 $options['tokens'] = $this->findTokens($emailContentAll, $results);
-                 $newEmailContent = $this->replaceTokensFromContent($emailContent, $results);
-
+               // $newEmailContent = $this->replaceTokensFromContent($emailContent, $results);
               //  $newEmailContent = $emailContent;
 
                 // replace dynamic content tokens
-                $dynamicContentAsArraysNew = $dynamicContentAsArrays;
+             /*   $dynamicContentAsArraysNew = $dynamicContentAsArrays;
                 foreach ($dynamicContentAsArraysNew as &$dynamicContentAsArray) {
                     $dynamicContentAsArray['content'] = $this->replaceTokensFromContent(
                         $dynamicContentAsArray['content'],
@@ -509,10 +507,11 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                         }
                     }
                 }
-
                 $email->setDynamicContent($dynamicContentAsArraysNew);
+
+
                 // replace all form field tokens
-                $email->setCustomHtml($newEmailContent);
+                $email->setCustomHtml($newEmailContent);*/
 
                 $options['channel'] = ['form.result', $results['id']];
                 $result             = $this->emailModel->sendEmail($email, $leadCredentials, $options);
@@ -575,8 +574,8 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                     if (isset($tokenList[$token])) {
                         continue;
                     }
-
-                    $tokenList[$token] = $this->getTokenValue($results, $match);
+                    $value = $this->getTokenValue($results, $match);;
+                    $tokenList[$token] = $value;
                 }
             }
         }

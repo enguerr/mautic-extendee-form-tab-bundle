@@ -62,6 +62,12 @@ return [
                     'mautic.helper.core_parameters'
                 ],
             ],
+            'mautic.extendee.form.tab.redirect.subscriber' => [
+                'class'     => \MauticPlugin\MauticExtendeeFormTabBundle\EventListener\RedirectSubscriber::class,
+                'arguments' => [
+                    'mautic.model.factory'
+                ],
+            ],
         ],
         'forms' => [
             'mautic.form.tab.type.submission' => [
