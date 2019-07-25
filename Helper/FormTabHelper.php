@@ -12,13 +12,11 @@
 namespace MauticPlugin\MauticExtendeeFormTabBundle\Helper;
 
 use Doctrine\ORM\EntityManager;
-use Joomla\Http\Http;
 use Mautic\CampaignBundle\Entity\Event;
 use Mautic\CoreBundle\Helper\CoreParametersHelper;
 use Mautic\CoreBundle\Helper\TemplatingHelper;
 use Mautic\CoreBundle\Helper\UserHelper;
 use Mautic\CoreBundle\Security\Permissions\CorePermissions;
-use Mautic\EmailBundle\Entity\Stat;
 use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\FormBundle\Entity\Field;
 use Mautic\FormBundle\Entity\Form;
@@ -351,10 +349,8 @@ class FormTabHelper
      */
     public function compareValue($form, Lead $lead, $field, $value, $operatorExpr = 'eq')
     {
-
         $formAlias = $form->getAlias();
         $formId    = $form->getId();
-
 
         // Modify operator
         switch ($operatorExpr) {
@@ -403,12 +399,32 @@ class FormTabHelper
             $q->andWhere($q->expr()->eq('r.'.$field, ':value'))
                 ->setParameter('value', $value->format('Y-m-d'));
         }else{
-            $q->andWhere($q->expr()->$operatorExpr('r.'.$field, ':value'))
-                ->setParameter('value', $value);
+            switch ($this->getFieldTypeFromFormByAlias($form, $field)) {
+                case 'boolean':
+                case 'number':
+                    $q->andWhere($q->expr()->$operatorExpr('r.'.$field, $value));
+                    break;
+                default:
+                    $q->andWhere($q->expr()->$operatorExpr('r.'.$field, ':value'))
+                        ->setParameter('value', $value);
+                    break;
+            }
         }
 
         $results = $q->execute()->fetchAll();
         return $results;
+    }
+
+    /**
+     * @param Form $form
+     * @param string $fieldAlias
+     *
+     * @return string|null
+     */
+    private function getFieldTypeFromFormByAlias(Form $form, $fieldAlias)
+    {
+        $fieldEntity = $this->formModel->findFormFieldByAlias($form, $fieldAlias);
+        return $fieldEntity ? $fieldEntity->getType() : null;
     }
 
 
