@@ -76,6 +76,30 @@ class CampaignFormDateConditionType extends AbstractType
                 ],
             ]
         );
+
+        $choices = [];
+        $choices['='] = 'mautic.lead.list.form.operator.equals';
+        $choices['gt'] = 'mautic.lead.list.form.operator.greaterthan';
+        $choices['lt'] = 'mautic.lead.list.form.operator.lessthan';
+
+
+        $builder->add(
+            'expr',
+            'choice',
+            [
+                'label'    => 'mautic.lead.lead.events.campaigns.expression',
+                'multiple' => false,
+                'choices'  => $choices,
+                'empty_value' => false,
+                'required'   => false,
+                'label_attr' => ['class' => 'control-label'],
+                'attr'       => [
+                    'class'        => 'form-control',
+                    'data-show-on' => '{"campaignevent_properties_unit":["i", "h", "d", "m", "y"]}',
+                ],
+            ]
+        );
+
         $builder->add(
             'interval',
             NumberType::class,

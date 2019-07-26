@@ -320,6 +320,7 @@ class FormTabHelper
     public function getDateFields()
     {
         $forms = $this->getFormsEntities();
+        $dateFields = [];
         foreach ($forms as $entity) {
             /** @var Form $form */
             $form   = $entity[0];
@@ -344,10 +345,11 @@ class FormTabHelper
      * @param        $field
      * @param        $value
      * @param string $operatorExpr
+     * @param array  $config
      *
-     * @return bool
+     * @return array
      */
-    public function compareValue($form, Lead $lead, $field, $value, $operatorExpr = 'eq')
+    public function compareValue($form, Lead $lead, $field, $value, $operatorExpr = 'eq', $config = [])
     {
         $formAlias = $form->getAlias();
         $formId    = $form->getId();
@@ -396,7 +398,11 @@ class FormTabHelper
                 ->setParameter('month', $value->format('m'))
                 ->setParameter('day', $value->format('d'));
         } elseif($operatorExpr === 'date') {
-            $q->andWhere($q->expr()->eq('r.'.$field, ':value'))
+            $expr = 'eq';
+            if (!empty($config['expr'])) {
+                $expr = $config['expr'];
+            }
+            $q->andWhere($q->expr()->$expr('r.'.$field, ':value'))
                 ->setParameter('value', $value->format('Y-m-d'));
         }else{
             switch ($this->getFieldTypeFromFormByAlias($form, $field)) {

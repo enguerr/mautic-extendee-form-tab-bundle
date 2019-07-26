@@ -6,6 +6,7 @@
         <?php echo $view['form']->row($form['unit']); ?>
     </div>
     <div class="col-xs-3">
+        <?php echo $view['form']->row($form['expr']); ?>
         <?php echo str_replace('type="text"', 'type="number"', $view['form']->row($form['interval'])); ?>
     </div>
 </div>
