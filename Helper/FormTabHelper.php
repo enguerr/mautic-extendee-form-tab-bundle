@@ -27,6 +27,7 @@ use Mautic\LeadBundle\Entity\Lead;
 use Mautic\LeadBundle\Model\LeadModel;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Integration\FormTabIntegration;
+use MauticPlugin\MauticRecommenderBundle\Helper\SqlQuery;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
@@ -418,6 +419,10 @@ class FormTabHelper
         }
 
         $results = $q->execute()->fetchAll();
+        echo SqlQuery::getQuery($q);
+        echo '
+        ';
+        print_r($results);
         return $results;
     }
 

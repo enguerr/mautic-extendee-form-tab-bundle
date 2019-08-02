@@ -15,7 +15,6 @@ use Mautic\CoreBundle\EventListener\CommonSubscriber;
 use Mautic\CoreBundle\Factory\ModelFactory;
 use Mautic\EmailBundle\Model\EmailModel;
 use Mautic\PageBundle\Event\RedirectEvent;
-use Mautic\PageBundle\PageEvents;
 
 class RedirectSubscriber extends CommonSubscriber
 {
@@ -40,7 +39,7 @@ class RedirectSubscriber extends CommonSubscriber
     public static function getSubscribedEvents()
     {
         return [
-            PageEvents::ON_REDIRECT => ['onRedirect', 0],
+         //   PageEvents::ON_REDIRECT => ['onRedirect', 0],
         ];
     }
 
