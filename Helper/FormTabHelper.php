@@ -422,15 +422,76 @@ class FormTabHelper
     }
 
     /**
+     * @param array $complexConditionsEvents
+     * @param Lead  $lead
+     */
+    public function complexCompareValue(array $complexConditionsEvents, Lead $lead)
+    {
+        //use DBAL to get entity fields
+        $q = $this->entityManager->getConnection()->createQueryBuilder();
+        $q->select('s.id')
+            ->from(MAUTIC_TABLE_PREFIX.'form_submissions', 's')
+            ->where(
+                $q->expr()->andX(
+                    $q->expr()->eq('s.lead_id', ':lead')
+                )
+            )
+            ->setParameter('lead', $lead->getId());
+        $subQueries = [];
+        /** @var Event $complexConditionsEvent */
+        foreach ($complexConditionsEvents as $complexConditionsEvent) {
+            $config = $complexConditionsEvent->getProperties();
+            list($formId, $fieldAlias) = explode('|', $config['field']);
+            /** @var Form $form */
+            $form = $this->formTabHelper->getFormModel()->getEntity($formId);
+            $table = $this->submissionModel->getRepository()->getResultsTableName($formId, $form->getAlias());
+            $tableAlias = md5($table);
+            //use DBAL to get entity fields
+            if (!isset($subQueries[$tableAlias])) {
+                $subQuery = $this->entityManager->getConnection()->createQueryBuilder();
+                $subQuery->select('NULL')
+                    ->from($table, $tableAlias);
+                $subQuery->where(
+                    $q->expr()->andX(
+                        $q->expr()->eq($tableAlias.'.id', 's.submission_id'),
+                        $q->expr()->eq($tableAlias.'.form_id', ':formId'),
+                        $q->expr()->eq($tableAlias.'.lead_id', ':leadId')
+                    )
+                        ->setParameter('leadId', $lead->getId())
+                        ->setParameter('formId', $form->getId())
+                );
+            }
+        }
+    }
+
+
+    /**
      * @param Form $form
      * @param string $fieldAlias
      *
      * @return string|null
      */
-    private function getFieldTypeFromFormByAlias(Form $form, $fieldAlias)
+    public function getFieldTypeFromFormByAlias(Form $form, $fieldAlias)
     {
-        $fieldEntity = $this->formModel->findFormFieldByAlias($form, $fieldAlias);
+        $fieldEntity = $this->findFormFieldByAlias($form, $fieldAlias);
         return $fieldEntity ? $fieldEntity->getType() : null;
+    }
+
+    /**
+     * @param Form   $form
+     * @param string $fieldAlias
+     *
+     * @return Field|null
+     */
+    private function findFormFieldByAlias(Form $form, $fieldAlias)
+    {
+        foreach ($form->getFields() as $field) {
+            if ($field->getAlias() === $fieldAlias) {
+                return $field;
+            }
+        }
+
+        return null;
     }
 
 
