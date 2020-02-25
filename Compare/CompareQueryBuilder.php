@@ -165,8 +165,8 @@ class CompareQueryBuilder
         if ($operatorExpr === 'anniversary') {
             $subQuery->andWhere(
                 $subQuery->expr()->andX(
-                    $subQuery->expr()->eq("MONTH($tableAlias.'.'. $field)", ':month'),
-                    $subQuery->expr()->eq("DAY($tableAlias.'.'. $field)", ':day')
+                    $subQuery->expr()->eq("MONTH($tableAlias.$field)", ':month'),
+                    $subQuery->expr()->eq("DAY($tableAlias.$field)", ':day')
                 )
             )
                 ->setParameter('month', $value->format('m'))
@@ -176,16 +176,16 @@ class CompareQueryBuilder
             if (!empty($config['expr'])) {
                 $expr = $config['expr'];
             }
-            $subQuery->andWhere($subQuery->expr()->$expr($tableAlias.'.'. $field, ':'.$valueParameter))
+            $subQuery->andWhere($subQuery->expr()->$expr($tableAlias.'.'.$field, ':'.$valueParameter))
                 ->setParameter($valueParameter, $value->format('Y-m-d'));
         } else {
             switch ($this->formTabHelper->getFieldTypeFromFormByAlias($form, $field)) {
                 case 'boolean':
                 case 'number':
-                    $subQuery->andWhere($subQuery->expr()->$operatorExpr($tableAlias.'.'. $field, $value));
+                    $subQuery->andWhere($subQuery->expr()->$operatorExpr($tableAlias.'.'.$field, $value));
                     break;
                 default:
-                    $subQuery->andWhere($subQuery->expr()->$operatorExpr($tableAlias.'.'. $field, ':'.$valueParameter))
+                    $subQuery->andWhere($subQuery->expr()->$operatorExpr($tableAlias.'.'.$field, ':'.$valueParameter))
                         ->setParameter($valueParameter, $value);
                     break;
             }
