@@ -18,12 +18,10 @@ use Mautic\CampaignBundle\Event\CampaignBuilderEvent;
 use Mautic\CampaignBundle\Event\CampaignEvent;
 use Mautic\CampaignBundle\Event\ConditionEvent;
 use Mautic\CoreBundle\Helper\ArrayHelper;
-use Mautic\CoreBundle\Helper\CoreParametersHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\CompareQueryBuilder;
+use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEventDTO;
 use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\CampaignComplexConditionType;
-use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\CampaignFormDateConditionType;
 use MauticPlugin\MauticExtendeeFormTabBundle\FormTabEvents;
-use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 
@@ -97,17 +95,23 @@ class CampaignComplexFormConditionSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $complexConditionsEvents = $this->getComplexConditionsForEvent($event->getLog()->getEvent(), 'e.id');
+        $campaignEvents = new \MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEvents();
+        foreach (CampaignComplexConditionType::getConditionsTypes() as $conditionsType) {
+            $complexConditionsEvents = $this->getComplexConditionsForEvent($event->getLog()->getEvent(), 'e.id', $conditionsType);
+            if ($complexConditionsEvents) {
+                $campaignEvents->addCampaignEvent(new CampaignEventDTO(
+                    $event,
+                    $complexConditionsEvents,
+                    $conditionsType
+                ));
+            }
+
+        }
         // Pass with an error for the UI.
-        if (!$complexConditionsEvents) {
-            echo 'fff';
+        if (empty($campaignEvents->getCampaignEvents())) {
             $event->setFailed('Any complex condition');
         } else {
-            $campaignEventDTO = new \MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEventDTO(
-                $event,
-                $complexConditionsEvents
-            );
-            $results          = $this->compareQueryBuilder->compareValue($campaignEventDTO);
+            $results          = $this->compareQueryBuilder->compareValue($campaignEvents);
             if (!empty($results)) {
                 $event->pass();
             } else {
@@ -122,9 +126,18 @@ class CampaignComplexFormConditionSubscriber implements EventSubscriberInterface
      *
      * @return EventRepository[]|null
      */
-    private function getComplexConditionsForEvent(Event $event, $column = 'e.tempId')
+    private function getComplexConditionsForEvent(Event $event, $column = 'e.tempId', $conditionsType = null)
     {
         $properties        = $event->getProperties();
+        $selectedIds = ArrayHelper::getValue(
+            $conditionsType,
+            $properties
+        );
+
+        if (empty($selectedIds)) {
+            return null;
+        }
+
         $complexConditions = $this->eventRepository->getEntities(
             [
                 'ignore_paginator' => true,
@@ -132,10 +145,7 @@ class CampaignComplexFormConditionSubscriber implements EventSubscriberInterface
                     'force' => [
                         [
                             'column' => $column,
-                            'value'  => ArrayHelper::getValue(
-                                CampaignComplexConditionType::COMPLEX_CONDITIONS,
-                                $properties
-                            ),
+                            'value'  => $selectedIds,
                             'expr'   => 'in',
                         ],
                         [
@@ -175,37 +185,40 @@ class CampaignComplexFormConditionSubscriber implements EventSubscriberInterface
                 continue;
             }
 
-            $complexConditions = $this->getComplexConditionsForEvent($event);
+            foreach (CampaignComplexConditionType::getConditionsTypes() as $conditionsType) {
+                $complexConditions = $this->getComplexConditionsForEvent($event, 'e.tempId', $conditionsType);
+                if ($complexConditions !== null) {
 
-            if ($complexConditions !== null) {
+                    $conditions = ArrayHelper::getValue(
+                        $conditionsType,
+                        $event->getProperties()
+                    );
 
-                $conditions = ArrayHelper::getValue(
-                    CampaignComplexConditionType::COMPLEX_CONDITIONS,
-                    $event->getProperties()
-                );
+                    $conditions = array_flip($conditions);
 
-                $conditions = array_flip($conditions);
-
-                foreach ($complexConditions as $complexCondition) {
-                    if (isset($conditions[$complexCondition->getTempId()])) {
-                        unset($conditions[$complexCondition->getTempId()]);
-                        $conditions[$complexCondition->getId()] = $complexCondition->getId();
+                    foreach ($complexConditions as $complexCondition) {
+                        if (isset($conditions[$complexCondition->getTempId()])) {
+                            unset($conditions[$complexCondition->getTempId()]);
+                            $conditions[$complexCondition->getId()] = $complexCondition->getId();
+                        }
                     }
+
+                    $conditions = array_keys($conditions);
+
+                    $event->setProperties(
+                        array_merge(
+                            $event->getProperties(),
+                            [
+                                $conditionsType => $conditions,
+                            ]
+                        )
+                    );
+
+                    $toSave[] = $event;
                 }
-
-                $conditions = array_keys($conditions);
-
-                $event->setProperties(
-                    array_merge(
-                        $event->getProperties(),
-                        [
-                            CampaignComplexConditionType::COMPLEX_CONDITIONS => $conditions,
-                        ]
-                    )
-                );
-
-                $toSave[] = $event;
             }
+
+
         }
 
         if (count($toSave)) {

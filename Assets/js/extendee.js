@@ -20,26 +20,31 @@ if (formId) {
 }
 
 Mautic.updateComplexConditionEventOptions = function () {
-    var complexConditionSelectNode = mQuery("#campaignevent_properties_conditions");
+    var complexConditionSelectNodes = mQuery(".campaignevent_properties_conditions");
 
-    complexConditionSelectNode.children().remove();
+    complexConditionSelectNodes.each(function () {
+        var complexConditionSelectNode = mQuery(this);
+        complexConditionSelectNode.children().remove();
 
-    var selected = complexConditionSelectNode.data("selected");
+        var selected = complexConditionSelectNode.data("selected");
 
-    for (var eventId in Mautic.campaignBuilderCanvasEvents) {
-        var event = Mautic.campaignBuilderCanvasEvents[eventId];
+        for (var eventId in Mautic.campaignBuilderCanvasEvents) {
+            var event = Mautic.campaignBuilderCanvasEvents[eventId];
 
-        if (event.type !== 'form.complex.condition' && (event.type === 'form.field_value' || event.type === 'form.tab.date.condition')) {
-            var opt = mQuery("<option />")
-                .attr("value", event.id)
-                .text(event.name)
+            if (event.type !== 'form.complex.condition' && (event.type === 'form.field_value' || event.type === 'form.tab.date.condition')) {
+                var opt = mQuery("<option />")
+                    .attr("value", event.id)
+                    .text(event.name)
 
-            if (mQuery.inArray(event.id+"", selected) > -1 || mQuery.inArray(event.id, selected) > -1) {
-                opt.attr("selected", "selected");
+                if (mQuery.inArray(event.id+"", selected) > -1 || mQuery.inArray(event.id, selected) > -1) {
+                    opt.attr("selected", "selected");
+                }
+                complexConditionSelectNode.append(opt);
             }
-            complexConditionSelectNode.append(opt);
         }
-    }
 
-    complexConditionSelectNode.trigger("chosen:updated");
+        complexConditionSelectNode.trigger("chosen:updated");
+    })
+
+
 };

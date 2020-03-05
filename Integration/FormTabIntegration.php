@@ -2,6 +2,7 @@
 
 namespace MauticPlugin\MauticExtendeeFormTabBundle\Integration;
 
+use Mautic\CoreBundle\Form\Type\YesNoButtonGroupType;
 use Mautic\FormBundle\Form\Type\FormListType;
 use Mautic\PluginBundle\Integration\AbstractIntegration;
 
@@ -60,6 +61,15 @@ class FormTabIntegration extends AbstractIntegration
                     'attr'       => [
                         'class'   => 'form-control',
                     ],
+                ]
+            );
+
+            $builder->add(
+                'debugMode',
+                YesNoButtonGroupType::class,
+                [
+                    'label' => 'mautic.form.tab.form.debug_mode',
+                    'data'  => isset($data['debugMode']) ? $data['debugMode'] : false,
                 ]
             );
         }

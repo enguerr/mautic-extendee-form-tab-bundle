@@ -13,6 +13,7 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Helper;
 
 use Doctrine\ORM\EntityManager;
 use Mautic\CampaignBundle\Entity\Event;
+use Mautic\CoreBundle\Helper\ArrayHelper;
 use Mautic\CoreBundle\Helper\CoreParametersHelper;
 use Mautic\CoreBundle\Helper\TemplatingHelper;
 use Mautic\CoreBundle\Helper\UserHelper;
@@ -27,6 +28,7 @@ use Mautic\LeadBundle\Entity\Lead;
 use Mautic\LeadBundle\Model\LeadModel;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Integration\FormTabIntegration;
+use Monolog\Logger;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
@@ -94,6 +96,11 @@ class FormTabHelper
     private $emailModel;
 
     /**
+     * @var Logger
+     */
+    private $logger;
+
+    /**
      * FormTabHelper constructor.
      *
      * @param TemplatingHelper                     $templatingHelper
@@ -107,6 +114,7 @@ class FormTabHelper
      * @param CoreParametersHelper                 $coreParametersHelper
      * @param RequestStack                         $requestStack
      * @param EmailModel                           $emailModel
+     * @param Logger                               $logger
      */
     public function __construct(
         TemplatingHelper $templatingHelper,
@@ -119,7 +127,8 @@ class FormTabHelper
         EntityManager $entityManager,
         CoreParametersHelper $coreParametersHelper,
         RequestStack $requestStack,
-        EmailModel $emailModel
+        EmailModel $emailModel,
+        Logger $logger
     ) {
 
         $this->formModel            = $formModel;
@@ -133,6 +142,7 @@ class FormTabHelper
         $this->coreParametersHelper = $coreParametersHelper;
         $this->request              = $requestStack;
         $this->emailModel = $emailModel;
+        $this->logger = $logger;
     }
 
     /**
@@ -977,5 +987,22 @@ class FormTabHelper
     public function sanitizeValue($value)
     {
         return str_replace(['"', '>', '<'], ['&quot;', '&gt;', '&lt;'], strip_tags(rawurldecode($value)));
+    }
+
+    /**
+     * @param string $message
+     */
+    public function log($message)
+    {
+        /** @var FormTabIntegration $formTab */
+        $formTab = $this->integrationHelper->getIntegrationObject('FormTab');
+
+        if ($formTab && $formTab->getIntegrationSettings()->getIsPublished()) {
+            $keys = $formTab->getKeys();
+            if (ArrayHelper::getValue('debugMode', $keys)) {
+                $this->logger->warning($message);
+            }
+        }
+        $this->logger->debug($message);
     }
 }

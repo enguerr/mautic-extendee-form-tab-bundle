@@ -142,6 +142,7 @@ return [
                     'mautic.helper.core_parameters',
                     'request_stack',
                     'mautic.email.model.email',
+                    'monolog.logger.mautic',
                 ],
             ],
         ],

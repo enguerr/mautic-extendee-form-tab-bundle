@@ -18,7 +18,12 @@ use Symfony\Component\Validator\Constraints\NotBlank;
 
 class CampaignComplexConditionType extends AbstractType
 {
-    CONST COMPLEX_CONDITIONS = 'conditions';
+    CONST COMPLEX_CONDITIONS  = 'conditions';
+
+    CONST COMPLEX_CONDITIONS2 = 'conditions2';
+
+    CONST COMPLEX_CONDITIONS3 = 'conditions3';
+
     /**
      * @param FormBuilderInterface $builder
      * @param array                $options
@@ -26,33 +31,38 @@ class CampaignComplexConditionType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
         $properties = $builder->getData();
-        $selected  = isset($properties[self::COMPLEX_CONDITIONS]) ? $properties[self::COMPLEX_CONDITIONS] : null;
 
-        $builder->add(
-            self::COMPLEX_CONDITIONS,
-            ChoiceType::class,
-            [
-                'choices'    => [],
-                'multiple'   => false,
-                'label'      => 'mautic.form.tab.campaign.complex_form_condition',
-                'label_attr' => ['class' => 'control-label'],
-                'attr'       => [
-                    'class'                => 'form-control',
-                    'data-onload-callback' => 'updateComplexConditionEventOptions',
-                    'data-selected'        => json_encode($selected),
-                ],
-                'multiple'=> true,
-                'constraints' => [
-                    new NotBlank(
-                        [
-                            'message' => 'mautic.core.value.required',
-                        ]
-                    ),
-                ],
-            ]
-        );
+        foreach (self::getConditionsTypes() as $conditionsType) {
+            $selected = isset($properties[$conditionsType]) ? $properties[$conditionsType] : null;
+            $builder->add(
+                $conditionsType,
+                ChoiceType::class,
+                [
+                    'choices'    => [],
+                    'multiple'   => false,
+                    'label'      => 'mautic.form.tab.campaign.complex_form_condition',
+                    'label_attr' => ['class' => 'control-label'],
+                    'attr'       => [
+                        'class'                => 'form-control campaignevent_properties_conditions',
+                        'data-onload-callback' => 'updateComplexConditionEventOptions',
+                        'data-selected'        => json_encode($selected),
+                    ],
+                    'multiple'   => true,
+                    'required'   => false,
+                ]
+            );
 
-        // Allows additional values (new events) to be selected before persisting
-        $builder->get(self::COMPLEX_CONDITIONS)->resetViewTransformers();
+            // Allows additional values (new events) to be selected before persisting
+            $builder->get($conditionsType)->resetViewTransformers();
+        }
+
+    }
+
+    /**
+     * @return array
+     */
+    public static function getConditionsTypes()
+    {
+        return [self::COMPLEX_CONDITIONS, self::COMPLEX_CONDITIONS2, self::COMPLEX_CONDITIONS3];
     }
 }

@@ -18,6 +18,7 @@ use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEventDTO;
+use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CompareEvent;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 
@@ -54,6 +55,11 @@ class CompareQueryBuilder
     private $formTabHelper;
 
     /**
+     * @var array
+     */
+    private $subQueriesConditions;
+
+    /**
      * CompareQueryBuilder constructor.
      *
      * @param EntityManager   $entityManager
@@ -72,10 +78,8 @@ class CompareQueryBuilder
         $this->formTabHelper   = $formTabHelper;
     }
 
-    public function compareValue(CampaignEventDTO $campaignEvent)
+    public function compareValue(CampaignEvents $campaignEvents)
     {
-        $this->campaignEvent = $campaignEvent;
-
         //use DBAL to get entity fields
         $q = $this->entityManager->getConnection()->createQueryBuilder();
         $q->select('s.id')
@@ -85,27 +89,47 @@ class CompareQueryBuilder
                     $q->expr()->eq('s.lead_id', ':leadId')
                 )
             )
-            ->setParameter('leadId', $campaignEvent->getContact()->getId());
+            ->setParameter('leadId', $campaignEvents->first()->getContact()->getId());
 
-        foreach ($campaignEvent->getCompareEvents() as $compareEvent) {
-            $this->addSubQueriesLogic($compareEvent);
+        foreach ($campaignEvents->getCampaignEvents() as $campaignEvent) {
+            $this->campaignEvent = $campaignEvent;
+            foreach ($campaignEvent->getCompareEvents() as $compareEvent) {
+                $this->addSubQueriesLogic($this->campaignEvent->getConditionsType(), $compareEvent);
+            }
         }
 
+
         if (!empty($this->subQueries)) {
-            foreach ($this->subQueries as $subQuery) {
+            foreach ($this->subQueries as $table => $subQuery) {
+                $orX = $subQuery->expr()->orX();
+                foreach ($this->subQueriesConditions[$table] as $subQueriesConditions) {
+                    $andX = $subQuery->expr()->andX();
+                    foreach ($subQueriesConditions as $subQueriesCondition) {
+                        $andX->add($subQueriesCondition);
+                    }
+                    $orX->add($andX);
+                }
+
+                $subQuery->andWhere($orX);
+
                 $q->andWhere(sprintf("EXISTS (%s)", $subQuery->getSQL()));
-                foreach ($subQuery->getParameters() as $key=>$parameter) {
+                foreach ($subQuery->getParameters() as $key => $parameter) {
                     $q->setParameter($key, $parameter);
                 }
             }
         }
+
+        $this->formTabHelper->log(
+            sprintf("Complex query: %s with parameters %s", $q->getSQL(), print_r($q->getParameters(), true))
+        );
         return $q->execute()->fetchAll();
-        //print_r($q->getParameters());
-        //die(print_r($q->getSQL()));
-        //die(print_r($q->execute()->fetchAll()));
     }
 
-    private function addSubQueriesLogic(CompareEvent $compareEvent)
+    /**
+     * @param string       $conditionsType
+     * @param CompareEvent $compareEvent
+     */
+    private function addSubQueriesLogic($conditionsType, CompareEvent $compareEvent)
     {
         $formId = $compareEvent->getProperties()->getFormId();
         $config = $compareEvent->getProperties()->getProperties();
@@ -134,10 +158,12 @@ class CompareQueryBuilder
             $subQuery = $this->subQueries[$table];
         }
 
-        $operatorExpr = $compareEvent->getProperties()->getExpr($this->formModel->getFilterExpressionFunctions());
-        $field        = $compareEvent->getProperties()->getFieldAlias();
-        $value        = $compareEvent->getProperties()->getValue();
-        $valueParameter = 'value'.md5($field.$tableAlias);
+        $subQueryConditions = $subQuery->expr()->andX();
+
+        $operatorExpr   = $compareEvent->getProperties()->getExpr($this->formModel->getFilterExpressionFunctions());
+        $field          = $compareEvent->getProperties()->getFieldAlias();
+        $value          = $compareEvent->getProperties()->getValue();
+        $valueParameter = 'value'.md5($field.$tableAlias.$value);
         if ($compareEvent->getProperties()->isCustomDateCondition()) {
             $value = $this->formTabHelper->getDate($compareEvent->getProperties()->getProperties());
         }
@@ -163,34 +189,36 @@ class CompareQueryBuilder
         }
 
         if ($operatorExpr === 'anniversary') {
-            $subQuery->andWhere(
+            $subQueryConditions->add(
                 $subQuery->expr()->andX(
                     $subQuery->expr()->eq("MONTH($tableAlias.$field)", ':month'),
                     $subQuery->expr()->eq("DAY($tableAlias.$field)", ':day')
                 )
-            )
-                ->setParameter('month', $value->format('m'))
-                ->setParameter('day', $value->format('d'));
+            );
+            $subQuery->setParameter('month', $value->format('m'));
+            $subQuery->setParameter('day', $value->format('d'));
         } elseif ($operatorExpr === 'date') {
             $expr = 'eq';
             if (!empty($config['expr'])) {
                 $expr = $config['expr'];
             }
-            $subQuery->andWhere($subQuery->expr()->$expr($tableAlias.'.'.$field, ':'.$valueParameter))
-                ->setParameter($valueParameter, $value->format('Y-m-d'));
+            $subQueryConditions->add($subQuery->expr()->$expr($tableAlias.'.'.$field, ':'.$valueParameter));
+            $subQuery->setParameter($valueParameter, $value->format('Y-m-d'));
         } else {
             switch ($this->formTabHelper->getFieldTypeFromFormByAlias($form, $field)) {
                 case 'boolean':
                 case 'number':
-                    $subQuery->andWhere($subQuery->expr()->$operatorExpr($tableAlias.'.'.$field, $value));
+                    $subQueryConditions->add($subQuery->expr()->$operatorExpr($tableAlias.'.'.$field, $value));
                     break;
                 default:
-                    $subQuery->andWhere($subQuery->expr()->$operatorExpr($tableAlias.'.'.$field, ':'.$valueParameter))
-                        ->setParameter($valueParameter, $value);
+                    $subQueryConditions->add(
+                        $subQuery->expr()->$operatorExpr($tableAlias.'.'.$field, ':'.$valueParameter)
+                    );
+                    $subQuery->setParameter($valueParameter, $value);
                     break;
             }
         }
-
+        $this->subQueriesConditions[$table][$conditionsType][] = $subQueryConditions;
         $this->subQueries[$table] = $subQuery;
     }
 }

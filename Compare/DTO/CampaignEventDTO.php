@@ -29,10 +29,23 @@ class CampaignEventDTO
      */
     private $compareEvents;
 
-    public function __construct(ConditionEvent $campaignEvent, array $complexConditionsEvents)
+    /**
+     * @var string
+     */
+    private $conditionsType;
+
+    /**
+     * CampaignEventDTO constructor.
+     *
+     * @param ConditionEvent $campaignEvent
+     * @param array          $complexConditionsEvents
+     * @param string $conditionsType
+     */
+    public function __construct(ConditionEvent $campaignEvent, array $complexConditionsEvents, $conditionsType)
     {
         $this->campaignEvent = $campaignEvent;
         $this->complexConditionsEvents = $complexConditionsEvents;
+        $this->conditionsType = $conditionsType;
     }
 
     /**
@@ -52,5 +65,13 @@ class CampaignEventDTO
     public function getContact()
     {
         return $this->campaignEvent->getLead();
+    }
+
+    /**
+     * @return string
+     */
+    public function getConditionsType()
+    {
+        return $this->conditionsType;
     }
 }
