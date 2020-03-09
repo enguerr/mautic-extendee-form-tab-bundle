@@ -74,4 +74,12 @@ class CampaignEventDTO
     {
         return $this->conditionsType;
     }
+
+    /**
+     * @return ConditionEvent
+     */
+    public function getCampaignEvent()
+    {
+        return $this->campaignEvent;
+    }
 }

@@ -54,6 +54,15 @@ class CampaignComplexConditionType extends AbstractType
 
             // Allows additional values (new events) to be selected before persisting
             $builder->get($conditionsType)->resetViewTransformers();
+
+            $builder->add(
+                'sum',
+                NumberFieldConditionType::class,
+                [
+                    'label' => false,
+                ]
+            );
+
         }
 
     }
@@ -64,5 +73,13 @@ class CampaignComplexConditionType extends AbstractType
     public static function getConditionsTypes()
     {
         return [self::COMPLEX_CONDITIONS, self::COMPLEX_CONDITIONS2, self::COMPLEX_CONDITIONS3];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getName()
+    {
+        return 'form_tab_complex_condition';
     }
 }

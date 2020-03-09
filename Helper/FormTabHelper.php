@@ -329,23 +329,50 @@ class FormTabHelper
      */
     public function getDateFields()
     {
+        return $this->getFieldsByTypes(
+            [
+                'date',
+            ]
+        );
+    }
+
+    /**
+     * Get all date fields
+     *
+     * @return array
+     */
+    public function getNumberFields()
+    {
+        return $this->getFieldsByTypes(
+            [
+                'number',
+            ]
+        );
+    }
+
+    /**
+     * @param array $types
+     *
+     * @return array
+     */
+    private function getFieldsByTypes(array $types)
+    {
         $forms = $this->getFormsEntities();
-        $dateFields = [];
+        $formFields = [];
         foreach ($forms as $entity) {
             /** @var Form $form */
             $form   = $entity[0];
             $fields = $form->getFields();
             /** @var Field $field */
             foreach ($fields as $field) {
-                if (in_array($field->getType(), ['date'])) {
-                    $dateFields[$form->getId()][$field->getAlias()] = $field;
+                if (in_array($field->getType(), $types)) {
+                    $formFields[$form->getId()][$field->getAlias()] = $field;
                 }
             }
         }
 
-        return $dateFields;
+        return $formFields;
     }
-
 
     /**
      * Compare a form result value with defined value for lead.

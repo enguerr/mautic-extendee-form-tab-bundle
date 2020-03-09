@@ -77,6 +77,8 @@ class CampaignComplexFormConditionSubscriber implements EventSubscriberInterface
                 'description' => 'mautic.form.tab.campaign.complex.condition.desc',
                 'eventName'   => FormTabEvents::ON_CAMPAIGN_TRIGGER_CONDITION,
                 'formType'    => CampaignComplexConditionType::class,
+                'formTheme'   => 'MauticExtendeeFormTabBundle:FormTheme\ComplexCondition',
+
             ]
         );
 

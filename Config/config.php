@@ -100,6 +100,12 @@ return [
                     'mautic.extendee.form.tab.helper',
                 ],
             ],
+            'mautic.form.tab.type.campaign.form.field.number.condition' => [
+                'class'     => \MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\NumberFieldConditionType::class,
+                'arguments' => [
+                    'mautic.extendee.form.tab.helper',
+                ],
+            ],
         ],
         'other'  => [
             'mautic.form.tab.compare.query.builder' => [

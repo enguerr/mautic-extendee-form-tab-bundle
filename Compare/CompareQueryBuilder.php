@@ -14,6 +14,7 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Compare;
 
 use Doctrine\DBAL\Query\QueryBuilder;
 use Doctrine\ORM\EntityManager;
+use Mautic\CoreBundle\Helper\ArrayHelper;
 use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
@@ -21,6 +22,7 @@ use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEventDTO;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CompareEvent;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
+use MauticPlugin\MauticRecommenderBundle\Helper\SqlQuery;
 
 class CompareQueryBuilder
 {
@@ -58,6 +60,21 @@ class CompareQueryBuilder
      * @var array
      */
     private $subQueriesConditions;
+
+    /**
+     * @var string
+     */
+    private $table;
+
+    /**
+     * @var string
+     */
+    private $tableAlias;
+
+    /**
+     * @var Form
+     */
+    private $form;
 
     /**
      * CompareQueryBuilder constructor.
@@ -98,6 +115,18 @@ class CompareQueryBuilder
             }
         }
 
+        $conditionEvent  = $campaignEvents->first()->getCampaignEvent();
+        $addConditions = [];
+        if ($sum = ArrayHelper::getValue('sum', $conditionEvent->getEvent()['properties'])) {
+            if (!empty($sum['field']) && !empty($sum['value'])) {
+                list($formId, $fieldAlias) = explode('|',$sum['field']);
+                $subQuery = $this->getSubQuery($formId);
+                $expr = $sum['expr'];
+                $addConditions[$this->table] = $subQuery->expr()->$expr($this->tableAlias.'.'.$fieldAlias, ':sumvalue');
+                $q->setParameter('sumvalue', $sum['value']);
+            }
+        }
+
 
         if (!empty($this->subQueries)) {
             foreach ($this->subQueries as $table => $subQuery) {
@@ -106,6 +135,9 @@ class CompareQueryBuilder
                     $andX = $subQuery->expr()->andX();
                     foreach ($subQueriesConditions as $subQueriesCondition) {
                         $andX->add($subQueriesCondition);
+                    }
+                    if (isset($addConditions[$table])) {
+                        $andX->add($addConditions[$table]);
                     }
                     $orX->add($andX);
                 }
@@ -122,7 +154,45 @@ class CompareQueryBuilder
         $this->formTabHelper->log(
             sprintf("Complex query: %s with parameters %s", $q->getSQL(), print_r($q->getParameters(), true))
         );
+        die(print_r(SqlQuery::getQuery($q)));
         return $q->execute()->fetchAll();
+    }
+
+    /**
+     * @param string $table
+     * @param string $tableAlias
+     * @param int $formId
+     *
+     * @return QueryBuilder
+     */
+    private function getSubQuery(int $formId)
+    {
+        /** @var Form $form */
+        $form = $this->form = $this->formModel->getEntity($formId);
+        if (!$form) {
+            return;
+        }
+        $this->table      = $this->submissionModel->getRepository()->getResultsTableName($formId, $form->getAlias());
+        $this->tableAlias = 'alias'.md5($this->table);
+
+        if (!isset($this->subQueries[$this->table])) {
+            $subQuery = $this->entityManager->getConnection()->createQueryBuilder();
+
+            $subQuery->select('NULL')
+                ->from($this->table, $this->tableAlias);
+            $subQuery->where(
+                $subQuery->expr()->andX(
+                    $subQuery->expr()->eq($this->tableAlias.'.submission_id', 's.id'),
+                    $subQuery->expr()->eq($this->tableAlias.'.form_id', ':formId')
+                )
+            )
+                ->setParameter('formId', $formId);
+            $this->subQueries[$this->table] = $subQuery;
+        } else {
+            $subQuery = $this->subQueries[$this->table];
+        }
+
+        return $subQuery;
     }
 
     /**
@@ -133,30 +203,12 @@ class CompareQueryBuilder
     {
         $formId = $compareEvent->getProperties()->getFormId();
         $config = $compareEvent->getProperties()->getProperties();
-        /** @var Form $form */
-        $form = $this->formModel->getEntity($formId);
-        if (!$form) {
-            return;
-        }
-        $table      = $this->submissionModel->getRepository()->getResultsTableName($formId, $form->getAlias());
-        $tableAlias = 'alias'.md5($table);
 
-        if (!isset($this->subQueries[$table])) {
-            $subQuery = $this->entityManager->getConnection()->createQueryBuilder();
+        $subQuery = $this->getSubQuery($formId);
 
-            $subQuery->select('NULL')
-                ->from($table, $tableAlias);
-            $subQuery->where(
-                $subQuery->expr()->andX(
-                    $subQuery->expr()->eq($tableAlias.'.submission_id', 's.id'),
-                    $subQuery->expr()->eq($tableAlias.'.form_id', ':formId')
-                )
-            )
-                ->setParameter('formId', $formId);
-            $this->subQueries[$table] = $subQuery;
-        } else {
-            $subQuery = $this->subQueries[$table];
-        }
+        $table = $this->table;
+        $tableAlias = $this->tableAlias;
+        $form = $this->form;
 
         $subQueryConditions = $subQuery->expr()->andX();
 
