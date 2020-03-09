@@ -122,7 +122,7 @@ class CompareQueryBuilder
                 list($formId, $fieldAlias) = explode('|',$sum['field']);
                 $subQuery = $this->getSubQuery($formId);
                 $expr = $sum['expr'];
-                $addConditions[$this->table] = $subQuery->expr()->$expr($this->tableAlias.'.'.$fieldAlias, ':sumvalue');
+                $addConditions[$this->table] = $subQuery->expr()->$expr('SUM('.$this->table.'.'.$fieldAlias.')', ':sumvalue');
                 $q->setParameter('sumvalue', $sum['value']);
             }
         }
@@ -136,15 +136,15 @@ class CompareQueryBuilder
                     foreach ($subQueriesConditions as $subQueriesCondition) {
                         $andX->add($subQueriesCondition);
                     }
-                    if (isset($addConditions[$table])) {
-                        $andX->add($addConditions[$table]);
-                    }
                     $orX->add($andX);
+                }
+                if (isset($addConditions[$table])) {
+                    $q->having($addConditions[$table]);
                 }
 
                 $subQuery->andWhere($orX);
 
-                $q->andWhere(sprintf("EXISTS (%s)", $subQuery->getSQL()));
+                $q->innerJoin('s', sprintf("(%s)", $subQuery->getSQL()), $table, $table.'.submission_id = s.id');
                 foreach ($subQuery->getParameters() as $key => $parameter) {
                     $q->setParameter($key, $parameter);
                 }
@@ -154,7 +154,6 @@ class CompareQueryBuilder
         $this->formTabHelper->log(
             sprintf("Complex query: %s with parameters %s", $q->getSQL(), print_r($q->getParameters(), true))
         );
-        die(print_r(SqlQuery::getQuery($q)));
         return $q->execute()->fetchAll();
     }
 
@@ -178,11 +177,10 @@ class CompareQueryBuilder
         if (!isset($this->subQueries[$this->table])) {
             $subQuery = $this->entityManager->getConnection()->createQueryBuilder();
 
-            $subQuery->select('NULL')
+            $subQuery->select('*')
                 ->from($this->table, $this->tableAlias);
             $subQuery->where(
                 $subQuery->expr()->andX(
-                    $subQuery->expr()->eq($this->tableAlias.'.submission_id', 's.id'),
                     $subQuery->expr()->eq($this->tableAlias.'.form_id', ':formId')
                 )
             )
