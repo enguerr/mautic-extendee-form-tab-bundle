@@ -139,6 +139,7 @@ class CompareQueryBuilder
                     $orX->add($andX);
                 }
                 if (isset($addConditions[$table])) {
+                    $q->groupBy('s.lead_id');
                     $q->having($addConditions[$table]);
                 }
 
