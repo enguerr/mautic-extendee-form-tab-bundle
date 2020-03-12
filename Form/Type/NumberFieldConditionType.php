@@ -15,9 +15,8 @@ use Mautic\FormBundle\Entity\Field;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\NumberType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
-use Symfony\Component\Validator\Constraints\NotBlank;
 
 class NumberFieldConditionType extends AbstractType
 {
@@ -92,7 +91,7 @@ class NumberFieldConditionType extends AbstractType
 
         $builder->add(
             'value',
-            NumberType::class,
+            TextType::class,
             [
                 'label'      => 'mautic.core.value',
                 'label_attr' => ['class' => 'control-label'],
