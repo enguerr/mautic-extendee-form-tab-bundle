@@ -1028,6 +1028,7 @@ class FormTabHelper
             $keys = $formTab->getKeys();
             if (ArrayHelper::getValue('debugMode', $keys)) {
                 $this->logger->warning($message);
+                return;
             }
         }
         $this->logger->debug($message);
