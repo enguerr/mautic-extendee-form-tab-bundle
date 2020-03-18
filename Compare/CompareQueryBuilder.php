@@ -97,6 +97,8 @@ class CompareQueryBuilder
 
     public function compareValue(CampaignEvents $campaignEvents)
     {
+        $this->subQueries = [];
+        $this->subQueriesConditions = [];
         //use DBAL to get entity fields
         $q = $this->entityManager->getConnection()->createQueryBuilder();
         $q->select('s.id')
@@ -153,9 +155,29 @@ class CompareQueryBuilder
         }
 
         $this->formTabHelper->log(
-            sprintf("Complex query: %s with parameters %s", $q->getSQL(), print_r($q->getParameters(), true))
+            sprintf("Complex query: %s", $this->getQuery($q))
         );
         return $q->execute()->fetchAll();
+    }
+
+    /**
+     * @param QueryBuilder $query
+     *
+     * @return string
+     */
+    public function getQuery($query)
+    {
+        $q = $query->getSQL();
+        $params             = $query->getParameters();
+
+        foreach ($params as $name => $param) {
+            if (is_array($param)) {
+                $param = implode(',', $param);
+            }
+            $q = str_replace(":$name", "'$param'", $q);
+        }
+
+        return $q;
     }
 
     /**
