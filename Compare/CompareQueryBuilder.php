@@ -130,7 +130,7 @@ class CompareQueryBuilder
         $addConditions = [];
         $sum = ArrayHelper::getValue('sum', $conditionEvent->getEvent()['properties']);
         if ($sum) {
-            if (!empty($sum['field']) && !empty($sum['value'])) {
+            if (!empty($sum['field'])) {
                 list($formId, $fieldAlias) = explode('|',$sum['field']);
                 $subQuery = $this->getSubQuery($formId);
                 $expr = $sum['expr'];
