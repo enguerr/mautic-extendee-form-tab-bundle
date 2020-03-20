@@ -11,10 +11,13 @@
     <div class="col-xs-4">
         <?php echo $view['form']->row($form['sum']['field']); ?>
     </div>
-    <div class="col-xs-4">
+    <div class="col-xs-3">
         <?php echo $view['form']->row($form['sum']['expr']); ?>
     </div>
-    <div class="col-xs-4">
+    <div class="col-xs-2">
         <?php echo $view['form']->row($form['sum']['value']); ?>
+    </div>
+    <div class="col-xs-3">
+        <?php echo $view['form']->row($form['sum']['contactField']); ?>
     </div>
 </div>

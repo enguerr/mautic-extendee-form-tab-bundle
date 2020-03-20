@@ -114,7 +114,8 @@ return [
                     'doctrine.orm.entity_manager',
                     'mautic.form.model.form',
                     'mautic.form.model.submission',
-                    'mautic.extendee.form.tab.helper'
+                    'mautic.extendee.form.tab.helper',
+                    'mautic.lead.model.lead'
                 ],
             ],
             'mautic.extendee.form.tab.service.save_submission' => [

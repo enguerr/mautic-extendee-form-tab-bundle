@@ -12,11 +12,13 @@
 namespace MauticPlugin\MauticExtendeeFormTabBundle\Form\Type;
 
 use Mautic\FormBundle\Entity\Field;
+use Mautic\LeadBundle\Form\Type\LeadFieldsType;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Validator\Constraints\NotBlank;
 
 class NumberFieldConditionType extends AbstractType
 {
@@ -99,6 +101,21 @@ class NumberFieldConditionType extends AbstractType
                     'class' => 'form-control',
                 ],
                 'required'   => true,
+            ]
+        );
+
+        $builder->add(
+            'contactField',
+            LeadFieldsType::class,
+            [
+                'label'                 => 'mautic.form.tab.form.update_contact_field_with_sum',
+                'label_attr'            => ['class' => 'control-label'],
+                'multiple'              => false,
+                'empty_value'           => 'mautic.core.select',
+                'attr'                  => [
+                    'class'    => 'form-control',
+                ],
+                'required'    => false,
             ]
         );
 

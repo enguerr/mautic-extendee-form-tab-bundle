@@ -18,11 +18,11 @@ use Mautic\CoreBundle\Helper\ArrayHelper;
 use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
+use Mautic\LeadBundle\Model\LeadModel;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEventDTO;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CompareEvent;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
-use MauticPlugin\MauticRecommenderBundle\Helper\SqlQuery;
 
 class CompareQueryBuilder
 {
@@ -77,22 +77,31 @@ class CompareQueryBuilder
     private $form;
 
     /**
+     * @var LeadModel
+     */
+    private $leadModel;
+
+    /**
      * CompareQueryBuilder constructor.
      *
      * @param EntityManager   $entityManager
      * @param FormModel       $formModel
      * @param SubmissionModel $submissionModel
+     * @param FormTabHelper   $formTabHelper
+     * @param LeadModel       $leadModel
      */
     public function __construct(
         EntityManager $entityManager,
         FormModel $formModel,
         SubmissionModel $submissionModel,
-        FormTabHelper $formTabHelper
+        FormTabHelper $formTabHelper,
+        LeadModel $leadModel
     ) {
         $this->entityManager   = $entityManager;
         $this->formModel       = $formModel;
         $this->submissionModel = $submissionModel;
         $this->formTabHelper   = $formTabHelper;
+        $this->leadModel = $leadModel;
     }
 
     public function compareValue(CampaignEvents $campaignEvents)
@@ -119,12 +128,15 @@ class CompareQueryBuilder
 
         $conditionEvent  = $campaignEvents->first()->getCampaignEvent();
         $addConditions = [];
-        if ($sum = ArrayHelper::getValue('sum', $conditionEvent->getEvent()['properties'])) {
+        $sum = ArrayHelper::getValue('sum', $conditionEvent->getEvent()['properties']);
+        if ($sum) {
             if (!empty($sum['field']) && !empty($sum['value'])) {
                 list($formId, $fieldAlias) = explode('|',$sum['field']);
                 $subQuery = $this->getSubQuery($formId);
                 $expr = $sum['expr'];
-                $addConditions[$this->table] = $subQuery->expr()->$expr('SUM('.$this->table.'.'.$fieldAlias.')', ':sumvalue');
+                $sumColumn = 'SUM('.$this->table.'.'.$fieldAlias.')';
+                $q->addSelect($sumColumn.' as sumField');
+                $addConditions[$this->table] = $subQuery->expr()->$expr($sumColumn, ':sumvalue');
                 $q->setParameter('sumvalue', $sum['value']);
             }
         }
@@ -157,7 +169,13 @@ class CompareQueryBuilder
         $this->formTabHelper->log(
             sprintf("Complex query: %s", $this->getQuery($q))
         );
-        return $q->execute()->fetchAll();
+        $results = $q->execute()->fetchAll();
+        if (isset($results[0]['sumField']) && !empty($sum['contactField'])) {
+            $contact = $campaignEvents->first()->getContact();
+            $this->leadModel->setFieldValues($contact, [$sum['contactField'] => $results[0]['sumField']]);
+            $this->leadModel->saveEntity($contact);
+        }
+        return $results;
     }
 
     /**
