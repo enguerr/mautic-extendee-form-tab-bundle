@@ -14,6 +14,7 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO;
 
 use Mautic\CampaignBundle\Entity\Event;
 use Mautic\CampaignBundle\Event\ConditionEvent;
+use Mautic\LeadBundle\Entity\Lead;
 
 class CampaignEventDTO
 {
@@ -35,17 +36,23 @@ class CampaignEventDTO
     private $conditionsType;
 
     /**
+     * @var Lead
+     */
+    private $lead;
+
+    /**
      * CampaignEventDTO constructor.
      *
      * @param ConditionEvent $campaignEvent
      * @param array          $complexConditionsEvents
      * @param string $conditionsType
      */
-    public function __construct(ConditionEvent $campaignEvent, array $complexConditionsEvents, $conditionsType)
+    public function __construct(Event $campaignEvent, array $complexConditionsEvents, $conditionsType, Lead $lead)
     {
         $this->campaignEvent = $campaignEvent;
         $this->complexConditionsEvents = $complexConditionsEvents;
         $this->conditionsType = $conditionsType;
+        $this->lead = $lead;
     }
 
     /**
@@ -64,7 +71,7 @@ class CampaignEventDTO
      */
     public function getContact()
     {
-        return $this->campaignEvent->getLead();
+        return $this->lead;
     }
 
     /**
@@ -76,7 +83,7 @@ class CampaignEventDTO
     }
 
     /**
-     * @return ConditionEvent
+     * @return Event
      */
     public function getCampaignEvent()
     {

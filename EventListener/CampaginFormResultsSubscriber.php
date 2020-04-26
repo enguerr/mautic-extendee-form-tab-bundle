@@ -1,7 +1,7 @@
 <?php
 
 /*
- * @copyright   2014 Mautic Contributors. All rights reserved
+ * @copyright   2020 Mautic Contributors. All rights reserved
  * @author      Mautic
  *
  * @link        http://mautic.org
@@ -47,7 +47,7 @@ use Symfony\Component\Translation\TranslatorInterface;
  */
 class CampaginFormResultsSubscriber implements EventSubscriberInterface
 {
-    CONST ALLOWED_FORM_TAB_CONDITIONS = ['form.tab.date.condition', 'form.field_value'];
+    CONST ALLOWED_FORM_TAB_CONDITIONS = ['form.tab.date.condition', 'form.field_value', CampaignComplexFormConditionSubscriber::EVENT_NAME];
 
     CONST ALLOWED_FORM_TAB_DECISIONS  = ['email.open'];
 
@@ -245,6 +245,7 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
                         'condition' => [
                             'form.field_value',
                             'form.tab.date.condition',
+                            CampaignComplexFormConditionSubscriber::EVENT_NAME
                         ],
                     ],
                 ],
@@ -420,9 +421,9 @@ class CampaginFormResultsSubscriber implements EventSubscriberInterface
         // Return failed If parent form ID  not equal to modified form reuslts
         $eventParentsIds = $this->formTabHelper->getRelatedFormIdsFromEvents($eventParents, $config['form']);
         if (empty($eventParentsIds)) {
-            $event->failAll('Parent form ids are not same like form what you want to modify in form #'.$config['form']);
+           /* $event->failAll('Parent form ids are not same like form what you want to modify in form #'.$config['form']);
 
-            return;
+            return;*/
         }
 
         $form = $this->formModel->getRepository()->findOneById($formId);

@@ -27,6 +27,8 @@ use Mautic\FormBundle\Model\SubmissionModel;
 use Mautic\LeadBundle\Entity\Lead;
 use Mautic\LeadBundle\Model\LeadModel;
 use Mautic\PluginBundle\Helper\IntegrationHelper;
+use MauticPlugin\MauticExtendeeFormTabBundle\Compare\CompareQueryBuilder;
+use MauticPlugin\MauticExtendeeFormTabBundle\EventListener\CampaignComplexFormConditionSubscriber;
 use MauticPlugin\MauticExtendeeFormTabBundle\Integration\FormTabIntegration;
 use Monolog\Logger;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -101,6 +103,16 @@ class FormTabHelper
     private $logger;
 
     /**
+     * @var ComplexConditionHelper
+     */
+    private $complexConditionHelper;
+
+    /**
+     * @var CompareQueryBuilder
+     */
+    private $compareQueryBuilder;
+
+    /**
      * FormTabHelper constructor.
      *
      * @param TemplatingHelper                     $templatingHelper
@@ -115,6 +127,8 @@ class FormTabHelper
      * @param RequestStack                         $requestStack
      * @param EmailModel                           $emailModel
      * @param Logger                               $logger
+     * @param ComplexConditionHelper               $complexConditionHelper
+     * @param CompareQueryBuilder                  $compareQueryBuilder
      */
     public function __construct(
         TemplatingHelper $templatingHelper,
@@ -128,7 +142,9 @@ class FormTabHelper
         CoreParametersHelper $coreParametersHelper,
         RequestStack $requestStack,
         EmailModel $emailModel,
-        Logger $logger
+        Logger $logger,
+        ComplexConditionHelper $complexConditionHelper,
+        CompareQueryBuilder $compareQueryBuilder
     ) {
 
         $this->formModel            = $formModel;
@@ -143,6 +159,8 @@ class FormTabHelper
         $this->request              = $requestStack;
         $this->emailModel = $emailModel;
         $this->logger = $logger;
+        $this->complexConditionHelper = $complexConditionHelper;
+        $this->compareQueryBuilder = $compareQueryBuilder;
     }
 
     /**
@@ -442,7 +460,7 @@ class FormTabHelper
             $q->andWhere($q->expr()->$expr('r.'.$field, ':value'))
                 ->setParameter('value', $value->format('Y-m-d'));
         }else{
-            switch ($this->getFieldTypeFromFormByAlias($form, $field)) {
+            switch (self::getFieldTypeFromFormByAlias($form, $field)) {
                 case 'boolean':
                 case 'number':
                     $q->andWhere($q->expr()->$operatorExpr('r.'.$field, $value));
@@ -508,26 +526,13 @@ class FormTabHelper
      *
      * @return string|null
      */
-    public function getFieldTypeFromFormByAlias(Form $form, $fieldAlias)
-    {
-        $fieldEntity = $this->findFormFieldByAlias($form, $fieldAlias);
-        return $fieldEntity ? $fieldEntity->getType() : null;
-    }
-
-    /**
-     * @param Form   $form
-     * @param string $fieldAlias
-     *
-     * @return Field|null
-     */
-    private function findFormFieldByAlias(Form $form, $fieldAlias)
+    public static function getFieldTypeFromFormByAlias(Form $form, $fieldAlias)
     {
         foreach ($form->getFields() as $field) {
             if ($field->getAlias() === $fieldAlias) {
                 return $field;
             }
         }
-
         return null;
     }
 
@@ -571,13 +576,17 @@ class FormTabHelper
     public function getFormIdFromEvent($eventParent)
     {
         $fieldAlias = null;
+        $formId = null;
         // If form value condition
         if ($eventParent->getType() === 'form.field_value') {
             $formId     = $eventParent->getProperties()['form'];
             $fieldAlias = $eventParent->getProperties()['field'];
         } else {
+            if (isset($eventParent->getProperties()['field'])) {
+                list($formId, $fieldAlias) = explode('|', $eventParent->getProperties()['field']);
+
+            }
             // If form date value condition
-            list($formId, $fieldAlias) = explode('|', $eventParent->getProperties()['field']);
         }
 
         return [$formId, $fieldAlias];
@@ -722,22 +731,31 @@ class FormTabHelper
      */
     public function formResultsFromFromEvent($event, Lead $lead)
     {
-        list($formId, $fieldAlias) = $this->getFormIdFromEvent($event);
-        $operators  = $this->formModel->getFilterExpressionFunctions();
-        $form       = $this->formModel->getRepository()->findOneById($formId);
-        $operator   = 'eq';
-        $properties = $event->getProperties();
-        if (!empty($properties['operator'])) {
-            $operator = $operators[$properties['operator']]['expr'];
-            $value    = $properties['value'];
-        } elseif(!empty($properties['unit'])) {
-            $operator = 'date';
-            if ($properties['unit'] === 'anniversary') {
-                $operator = 'anniversary';
+        if ($event->getType() === CampaignComplexFormConditionSubscriber::EVENT_NAME) {
+            $campaignEvents = $this->complexConditionHelper->getCampaignEvents($event, $lead);
+            // Pass with an error for the UI.
+            if (!empty($campaignEvents->getCampaignEvents())) {
+                return $this->compareQueryBuilder->compareValue($campaignEvents);
             }
-            $value = $this->getDate($properties);
+        } else {
+            list($formId, $fieldAlias) = $this->getFormIdFromEvent($event);
+            $operators  = $this->formModel->getFilterExpressionFunctions();
+            $form       = $this->formModel->getRepository()->findOneById($formId);
+            $operator   = 'eq';
+            $properties = $event->getProperties();
+            if (!empty($properties['operator'])) {
+                $operator = $operators[$properties['operator']]['expr'];
+                $value    = $properties['value'];
+            } elseif (!empty($properties['unit'])) {
+                $operator = 'date';
+                if ($properties['unit'] === 'anniversary') {
+                    $operator = 'anniversary';
+                }
+                $value = $this->getDate($properties);
+            }
+
+            return $this->compareValue($form, $lead, $fieldAlias, $value, $operator, $properties);
         }
-        return $this->compareValue($form, $lead, $fieldAlias, $value, $operator, $properties);
     }
 
     /**

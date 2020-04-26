@@ -15,6 +15,7 @@ namespace MauticPlugin\MauticExtendeeFormTabBundle\Compare;
 use Doctrine\DBAL\Query\QueryBuilder;
 use Doctrine\ORM\EntityManager;
 use Mautic\CoreBundle\Helper\ArrayHelper;
+use Mautic\CoreBundle\Helper\ParamsLoaderHelper;
 use Mautic\FormBundle\Entity\Form;
 use Mautic\FormBundle\Model\FormModel;
 use Mautic\FormBundle\Model\SubmissionModel;
@@ -22,7 +23,9 @@ use Mautic\LeadBundle\Model\LeadModel;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEventDTO;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEvents;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CompareEvent;
+use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabDateHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabHelper;
+use Monolog\Logger;
 
 class CompareQueryBuilder
 {
@@ -52,11 +55,6 @@ class CompareQueryBuilder
     private $subQueries;
 
     /**
-     * @var FormTabHelper
-     */
-    private $formTabHelper;
-
-    /**
      * @var array
      */
     private $subQueriesConditions;
@@ -82,26 +80,39 @@ class CompareQueryBuilder
     private $leadModel;
 
     /**
+     * @var FormTabDateHelper
+     */
+    private $formTabDateHelper;
+
+    /**
+     * @var Logger
+     */
+    private $logger;
+
+    /**
      * CompareQueryBuilder constructor.
      *
-     * @param EntityManager   $entityManager
-     * @param FormModel       $formModel
-     * @param SubmissionModel $submissionModel
-     * @param FormTabHelper   $formTabHelper
-     * @param LeadModel       $leadModel
+     * @param EntityManager     $entityManager
+     * @param FormModel         $formModel
+     * @param SubmissionModel   $submissionModel
+     * @param LeadModel         $leadModel
+     * @param FormTabDateHelper $formTabDateHelper
+     * @param Logger            $logger
      */
     public function __construct(
         EntityManager $entityManager,
         FormModel $formModel,
         SubmissionModel $submissionModel,
-        FormTabHelper $formTabHelper,
-        LeadModel $leadModel
+        LeadModel $leadModel,
+        FormTabDateHelper $formTabDateHelper,
+        Logger $logger
     ) {
         $this->entityManager   = $entityManager;
         $this->formModel       = $formModel;
         $this->submissionModel = $submissionModel;
-        $this->formTabHelper   = $formTabHelper;
         $this->leadModel = $leadModel;
+        $this->formTabDateHelper = $formTabDateHelper;
+        $this->logger = $logger;
     }
 
     public function compareValue(CampaignEvents $campaignEvents)
@@ -126,9 +137,9 @@ class CompareQueryBuilder
             }
         }
 
-        $conditionEvent  = $campaignEvents->first()->getCampaignEvent();
+        $campaignEvent  = $campaignEvents->first()->getCampaignEvent()->convertToArray();
         $addConditions = [];
-        $sum = ArrayHelper::getValue('sum', $conditionEvent->getEvent()['properties']);
+        $sum = ArrayHelper::getValue('sum', $campaignEvent['properties']);
         if ($sum) {
             if (!empty($sum['field'])) {
                 list($formId, $fieldAlias) = explode('|',$sum['field']);
@@ -166,7 +177,7 @@ class CompareQueryBuilder
             }
         }
 
-        $this->formTabHelper->log(
+        $this->logger->warning(
             sprintf("Complex query: %s", $this->getQuery($q))
         );
         $results = $q->execute()->fetchAll();
@@ -256,7 +267,7 @@ class CompareQueryBuilder
         $value          = $compareEvent->getProperties()->getValue();
         $valueParameter = 'value'.md5($field.$tableAlias.$value);
         if ($compareEvent->getProperties()->isCustomDateCondition()) {
-            $value = $this->formTabHelper->getDate($compareEvent->getProperties()->getProperties());
+            $value = $this->formTabDateHelper->getDateFromConfig($compareEvent->getProperties()->getProperties());
         }
 
         // Modify operator
@@ -296,7 +307,7 @@ class CompareQueryBuilder
             $subQueryConditions->add($subQuery->expr()->$expr($tableAlias.'.'.$field, ':'.$valueParameter));
             $subQuery->setParameter($valueParameter, $value->format('Y-m-d'));
         } else {
-            switch ($this->formTabHelper->getFieldTypeFromFormByAlias($form, $field)) {
+            switch (FormTabHelper::getFieldTypeFromFormByAlias($form, $field)) {
                 case 'boolean':
                 case 'number':
                     $subQueryConditions->add($subQuery->expr()->$operatorExpr($tableAlias.'.'.$field, $value));

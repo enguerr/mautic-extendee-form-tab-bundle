@@ -73,6 +73,7 @@ return [
                 'arguments' => [
                     'mautic.campaign.repository.event',
                     'mautic.form.tab.compare.query.builder',
+                    'mautic.form.tab.helper.complex.condition'
                 ],
             ],
             'mautic.form.tab.asset.subscriber'                          => [
@@ -108,14 +109,27 @@ return [
             ],
         ],
         'other'  => [
+            'mautic.form.tab.helper.date' => [
+                'class'     => \MauticPlugin\MauticExtendeeFormTabBundle\Helper\FormTabDateHelper::class,
+                'arguments' => [
+                    'mautic.helper.core_parameters',
+                ],
+            ],
+            'mautic.form.tab.helper.complex.condition' => [
+                'class'     => \MauticPlugin\MauticExtendeeFormTabBundle\Helper\ComplexConditionHelper::class,
+                'arguments' => [
+                    'mautic.campaign.repository.event',
+                ],
+            ],
             'mautic.form.tab.compare.query.builder' => [
                 'class'     => \MauticPlugin\MauticExtendeeFormTabBundle\Compare\CompareQueryBuilder::class,
                 'arguments' => [
                     'doctrine.orm.entity_manager',
                     'mautic.form.model.form',
                     'mautic.form.model.submission',
-                    'mautic.extendee.form.tab.helper',
-                    'mautic.lead.model.lead'
+                    'mautic.lead.model.lead',
+                    'mautic.form.tab.helper.date',
+                    'monolog.logger.mautic'
                 ],
             ],
             'mautic.extendee.form.tab.service.save_submission' => [
@@ -150,6 +164,8 @@ return [
                     'request_stack',
                     'mautic.email.model.email',
                     'monolog.logger.mautic',
+                    'mautic.form.tab.helper.complex.condition',
+                    'mautic.form.tab.compare.query.builder'
                 ],
             ],
         ],

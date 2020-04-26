@@ -12,16 +12,15 @@
 namespace MauticPlugin\MauticExtendeeFormTabBundle\EventListener;
 
 use Mautic\CampaignBundle\CampaignEvents;
-use Mautic\CampaignBundle\Entity\Event;
 use Mautic\CampaignBundle\Entity\EventRepository;
 use Mautic\CampaignBundle\Event\CampaignBuilderEvent;
 use Mautic\CampaignBundle\Event\CampaignEvent;
 use Mautic\CampaignBundle\Event\ConditionEvent;
 use Mautic\CoreBundle\Helper\ArrayHelper;
 use MauticPlugin\MauticExtendeeFormTabBundle\Compare\CompareQueryBuilder;
-use MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEventDTO;
 use MauticPlugin\MauticExtendeeFormTabBundle\Form\Type\CampaignComplexConditionType;
 use MauticPlugin\MauticExtendeeFormTabBundle\FormTabEvents;
+use MauticPlugin\MauticExtendeeFormTabBundle\Helper\ComplexConditionHelper;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 
@@ -42,15 +41,22 @@ class CampaignComplexFormConditionSubscriber implements EventSubscriberInterface
     private $compareQueryBuilder;
 
     /**
+     * @var ComplexConditionHelper
+     */
+    private $complexConditionHelper;
+
+    /**
      * CampaignComplexFormConditionSubscriber constructor.
      *
-     * @param EventRepository     $eventRepository
-     * @param CompareQueryBuilder $compareQueryBuilder
+     * @param EventRepository        $eventRepository
+     * @param CompareQueryBuilder    $compareQueryBuilder
+     * @param ComplexConditionHelper $complexConditionHelper
      */
-    public function __construct(EventRepository $eventRepository, CompareQueryBuilder $compareQueryBuilder)
+    public function __construct(EventRepository $eventRepository, CompareQueryBuilder $compareQueryBuilder, ComplexConditionHelper $complexConditionHelper)
     {
         $this->eventRepository     = $eventRepository;
         $this->compareQueryBuilder = $compareQueryBuilder;
+        $this->complexConditionHelper = $complexConditionHelper;
     }
 
     /**
@@ -97,18 +103,7 @@ class CampaignComplexFormConditionSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $campaignEvents = new \MauticPlugin\MauticExtendeeFormTabBundle\Compare\DTO\CampaignEvents();
-        foreach (CampaignComplexConditionType::getConditionsTypes() as $conditionsType) {
-            $complexConditionsEvents = $this->getComplexConditionsForEvent($event->getLog()->getEvent(), 'e.id', $conditionsType);
-            if ($complexConditionsEvents) {
-                $campaignEvents->addCampaignEvent(new CampaignEventDTO(
-                    $event,
-                    $complexConditionsEvents,
-                    $conditionsType
-                ));
-            }
-
-        }
+        $campaignEvents = $this->complexConditionHelper->getCampaignEvents($event->getLog()->getEvent(), $event->getLead());
         // Pass with an error for the UI.
         if (empty($campaignEvents->getCampaignEvents())) {
             $event->setFailed('Any complex condition');
@@ -120,51 +115,6 @@ class CampaignComplexFormConditionSubscriber implements EventSubscriberInterface
                 $event->fail();
             }
         }
-    }
-
-    /**
-     * @param Event $event
-     * @param string         $column
-     *
-     * @return EventRepository[]|null
-     */
-    private function getComplexConditionsForEvent(Event $event, $column = 'e.tempId', $conditionsType = null)
-    {
-        $properties        = $event->getProperties();
-        $selectedIds = ArrayHelper::getValue(
-            $conditionsType,
-            $properties
-        );
-
-        if (empty($selectedIds)) {
-            return null;
-        }
-
-        $complexConditions = $this->eventRepository->getEntities(
-            [
-                'ignore_paginator' => true,
-                'filter'           => [
-                    'force' => [
-                        [
-                            'column' => $column,
-                            'value'  => $selectedIds,
-                            'expr'   => 'in',
-                        ],
-                        [
-                            'column' => 'e.campaign',
-                            'value'  => $event->getCampaign(),
-                            'expr'   => 'eq',
-                        ],
-                    ],
-                ],
-            ]
-        );
-
-        if (count($complexConditions)) {
-            return $complexConditions;
-        }
-
-        return null;
     }
 
     /**
@@ -188,7 +138,7 @@ class CampaignComplexFormConditionSubscriber implements EventSubscriberInterface
             }
 
             foreach (CampaignComplexConditionType::getConditionsTypes() as $conditionsType) {
-                $complexConditions = $this->getComplexConditionsForEvent($event, 'e.tempId', $conditionsType);
+                $complexConditions = $this->complexConditionHelper->getComplexConditionsForEvent($event, 'e.tempId', $conditionsType);
                 if ($complexConditions !== null) {
 
                     $conditions = ArrayHelper::getValue(
